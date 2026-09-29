@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InboxFlow - Inbox</title>
+  <link rel="stylesheet" href="inbox.css">
+  <!-- Google Fonts: Roboto and Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="images/inboxflow.svg">
+</head>
+<body>
+  <!-- Overall App Layout -->
+  <div class="app-container">
+    
+    <!-- Top Header Bar -->
+    <header class="app-header">
+      <div class="header-left">
+        <button class="icon-btn sidebar-toggle-btn" aria-label="Toggle Navigation menu">
+          <img src="images/three-horizontal-lined.svg" alt="Menu" class="sidebar-toggle-icon">
+        </button>
+        <div class="logo-group">
+          <img src="images/inboxflow.svg" alt="InboxFlow Logo" class="logo-img">
+          <span class="logo-text"><span style="color: black; font-weight: bold;">Inbox</span><span style="color: #0b57d0; font-weight: bold;">Flow</span></span>
+        </div>
+      </div>
+      
+      <div class="header-center">
+        <div class="search-bar">
+          <img src="images/magnifying-glass-solid-full.svg" alt="Search" class="search-bar-icon">
+          <input type="text" id="search-input" placeholder="Search mail" aria-label="Search mail">
+          <img src="images/sliders-solid-full.svg" alt="Filter" class="filter-bar-icon">
+        </div>
+      </div>
+      
+      <div class="header-right">
+        <button class="icon-btn" aria-label="Help">
+          <img src="images/question-svgrepo-com.svg" alt="Help" class="header-right-icon">
+        </button>
+        <button class="icon-btn" aria-label="Settings">
+          <img src="images/settings-gear-svgrepo-com.svg" alt="Settings" class="header-right-icon">
+        </button>
+        <img src="images/circle-user-regular-full.svg" alt="Account" class="header-avatar-img" id="header-avatar" title="Account Menu">
+      </div>
+    </header>
+
+    <!-- Account Dropdown Menu -->
+    <div class="account-dropdown" id="account-dropdown" style="display: none;">
+      <div class="dropdown-avatar" id="dropdown-avatar">U</div>
+      <div class="dropdown-name" id="dropdown-name">User Name</div>
+      <div class="dropdown-email" id="dropdown-email">user@gmail.com</div>
+      <div class="dropdown-divider"></div>
+      <button class="btn-dropdown-logout" id="btn-dropdown-logout">Sign out</button>
+    </div>
+
+
+    <!-- Content Workspace -->
+    <div class="app-body">
+      
+      <!-- Left Navigation Sidebar -->
+      <aside class="app-sidebar">
+        <button class="compose-btn" id="btn-compose">
+          <img src="images/pencil-solid-full.svg" alt="Compose" class="compose-btn-icon">
+          <span class="compose-text">Compose</span>
+        </button>
+        
+        <nav class="sidebar-nav">
+          <a href="#" class="nav-item active" id="nav-inbox" data-folder="inbox">
+            <img src="images/inbox-solid-full.svg" alt="Inbox" class="sidebar-icon">
+            <span class="nav-label">Inbox</span>
+            <span class="nav-badge" id="badge-inbox"></span>
+          </a>
+          <a href="#" class="nav-item" id="nav-starred" data-folder="starred">
+            <img src="images/star-regular-full.svg" alt="Starred" class="sidebar-icon">
+            <span class="nav-label">Starred</span>
+          </a>
+          <a href="#" class="nav-item" id="nav-sent" data-folder="sent">
+            <img src="images/paper-plane-regular-full.svg" alt="Sent" class="sidebar-icon sent-icon-rotate">
+            <span class="nav-label">Sent</span>
+          </a>
+          <a href="#" class="nav-item" id="nav-drafts" data-folder="drafts">
+            <img src="images/file-regular-full.svg" alt="Drafts" class="sidebar-icon">
+            <span class="nav-label">Drafts</span>
+            <span class="nav-badge" id="badge-drafts"></span>
+          </a>
+          <a href="#" class="nav-item" id="nav-bin" data-folder="bin">
+            <img src="images/trash-can-regular-full.svg" alt="Bin" class="sidebar-icon">
+            <span class="nav-label">Bin</span>
+          </a>
+          <a href="#" class="nav-item" id="nav-all" data-folder="all">
+            <img src="images/envelope-regular-full.svg" alt="All Mail" class="sidebar-icon">
+            <span class="nav-label">All Mail</span>
+          </a>
+        </nav>
+      </aside>
+
+      <!-- Main Mail Panel -->
+      <main class="mail-panel">
+        
+        <!-- Mail Action Bar -->
+        <div class="mail-action-bar">
+          <div class="action-left">
+            <input type="checkbox" id="select-all" class="action-checkbox" aria-label="Select all mails">
+            <button class="action-icon-btn" id="action-delete" title="Move to Bin" disabled>
+              <img src="images/trash-can-regular-full.svg" alt="Delete" class="action-bar-icon-img">
+            </button>
+            <button class="action-icon-btn" id="action-refresh" title="Refresh">
+              <img src="images/rotate-right-solid-full.svg" alt="Refresh" class="action-bar-icon-img">
+            </button>
+          </div>
+          <div class="action-right">
+            <span class="mail-count-info" id="mail-count-range">0-0 of 0</span>
+          </div>
+        </div>
+
+        <!-- Mail List Area -->
+        <div class="mail-list-container">
+          
+          <!-- Empty State (Matches screenshot) -->
+          <div class="empty-state" id="empty-state-view">
+            <div class="empty-title">Your inbox is empty</div>
+            <div class="empty-subtitle">Mails that don't appear in other tabs will be shown here.</div>
+          </div>
+
+          <!-- Mails Table List -->
+          <div class="mail-list-wrapper" id="mail-list-wrapper" style="display: none;">
+            <ul class="email-list" id="email-list">
+              <!-- Dynamically populated rows -->
+            </ul>
+          </div>
+        </div>
+
+        <!-- Email Detailed View Overlay Modal -->
+        <div class="email-details-modal" id="email-details-modal" style="display: none;">
+          <div class="details-header">
+            <button class="icon-btn back-btn" id="btn-details-back" title="Back">
+              <span style="font-size: 20px; line-height: 1;">&larr;</span>
+            </button>
+            <div class="details-actions">
+              <button class="action-icon-btn" id="details-action-delete" title="Move to Bin">
+                <img src="images/trash-can-regular-full.svg" alt="Delete" class="details-delete-icon" style="width: 20px; height: 20px;">
+              </button>
+            </div>
+          </div>
+          <div class="details-body">
+            <h2 class="details-subject" id="details-subject"></h2>
+            <div class="details-sender-info">
+              <div class="sender-avatar" id="details-sender-avatar"></div>
+              <div class="sender-metadata">
+                <div class="sender-identity">
+                  <span class="sender-name" id="details-sender-name"></span>
+                  <span class="sender-email" id="details-sender-email"></span>
+                </div>
+                <div class="receiver-row">
+                  <span class="receiver-email" id="details-receiver-email"></span>
+                </div>
+              </div>
+              <span class="details-time" id="details-timestamp"></span>
+            </div>
+            <div class="details-content" id="details-content"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Compose Message Modal (Bottom Right) -->
+    <div class="compose-modal" id="compose-modal" style="display: none;">
+      <div class="modal-header">
+        <span class="modal-title">New Message</span>
+        <div class="modal-controls">
+          <button class="control-btn" id="compose-minimize" aria-label="Minimize">—</button>
+          <button class="control-btn" id="compose-maximize" aria-label="Maximize">⤢</button>
+          <button class="control-btn" id="compose-close" aria-label="Close">✕</button>
+        </div>
+      </div>
+      <form id="compose-form" class="modal-body">
+        <div class="compose-input-group to-input-group">
+          <span class="to-label">To</span>
+          <div class="chips-container" id="chips-container">
+            <input type="text" id="email-to" placeholder="Recipients" autocomplete="off">
+          </div>
+        </div>
+        <div class="compose-input-group">
+          <input type="text" id="email-subject" placeholder="Subject">
+        </div>
+        <div class="compose-body-group">
+          <textarea id="email-body" placeholder="Write email body here..."></textarea>
+        </div>
+        <div class="modal-footer">
+          <div class="footer-left">
+            <button type="submit" class="btn-send">Send</button>
+          </div>
+          <div class="footer-right">
+            <button type="button" class="btn-discard" id="btn-compose-discard" title="Discard">
+              <img src="images/trash-can-regular-full.svg" alt="Discard" class="compose-discard-icon">
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+  </div>
+
+  <script src="inbox.js"></script>
+</body>
+</html>

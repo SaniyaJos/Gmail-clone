@@ -1,0 +1,259 @@
+/* Custom CSS for InboxFlow Home Page */
+
+/* CSS Variables for a clean Design System */
+:root {
+  --font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --color-primary: #1a73e8; /* Google Blue */
+  --color-primary-hover: #1557b0;
+  --color-text-dark: #202124;
+  --color-text-medium: #5f6368;
+  --color-bg-light: #f8f9fa;
+  --color-border: #dadce0;
+  --transition-speed: 0.2s;
+}
+
+/* Reset styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-family);
+  color: var(--color-text-dark);
+  background-color: #ffffff;
+  overflow-x: hidden;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Header styling */
+.header {
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  background-color: #ffffff;
+  border-bottom: 1px solid var(--color-border);
+  z-index: 1000;
+  height: 64px;
+}
+
+.header-container {
+  max-width: 1280px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logo-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  user-select: none;
+  cursor: pointer;
+}
+
+.gmail-logo {
+  height: 28px;
+  width: auto;
+}
+
+.logo-text {
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--color-text-medium);
+  letter-spacing: -0.5px;
+}
+
+.auth-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Buttons base styling */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 14px;
+  padding: 10px 24px;
+  border-radius: 4px;
+  transition: all var(--transition-speed) ease-in-out;
+  cursor: pointer;
+}
+
+.btn-secondary {
+  color: var(--color-primary);
+  background-color: #ffffff;
+  border: 1px solid var(--color-border);
+}
+
+.btn-secondary:hover {
+  background-color: #f8f9fa;
+  border-color: var(--color-primary);
+}
+
+.btn-primary {
+  color: #ffffff;
+  background-color: var(--color-primary);
+  border: 1px solid transparent;
+}
+
+.btn-primary:hover {
+  background-color: var(--color-primary-hover);
+  box-shadow: 0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15);
+}
+
+.btn-large {
+  font-size: 16px;
+  padding: 14px 32px;
+}
+
+/* Hero Section */
+.hero-section {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 60px 0;
+  background-color: #ffffff;
+}
+
+.hero-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: grid;
+  grid-template-columns: 1.1fr 1.3fr;
+  align-items: center;
+  gap: 60px;
+}
+
+.hero-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.hero-title {
+  font-size: 56px;
+  line-height: 1.15;
+  font-weight: 600;
+  color: var(--color-text-dark);
+  margin-bottom: 24px;
+  letter-spacing: -1px;
+}
+
+.hero-desc {
+  font-size: 18px;
+  color: var(--color-text-medium);
+  margin-bottom: 36px;
+  line-height: 1.6;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 16px;
+}
+
+.hero-image-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.hero-image {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  object-fit: contain;
+}
+
+/* Footer Section */
+.footer {
+  border-top: 1px solid var(--color-border);
+  padding: 24px 0;
+  background-color: #ffffff;
+}
+
+.footer-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  justify-content: center;
+}
+
+.footer-copyright {
+  font-size: 12px;
+  color: var(--color-text-medium);
+  text-align: center;
+}
+
+/* Responsive breakpoints */
+@media (max-width: 992px) {
+  .hero-container {
+    grid-template-columns: 1fr;
+    gap: 40px;
+    text-align: center;
+  }
+
+  .hero-content {
+    align-items: center;
+  }
+
+  .hero-title {
+    font-size: 40px;
+    line-height: 1.2;
+  }
+
+  .hero-desc {
+    font-size: 16px;
+    margin-bottom: 28px;
+  }
+
+  .hero-image-wrapper {
+    order: -1; /* image on top on tablet/mobile views */
+  }
+}
+
+@media (max-width: 576px) {
+  .header-container {
+    padding: 0 16px;
+  }
+
+  .logo-text {
+    font-size: 18px;
+  }
+
+  .auth-group {
+    gap: 8px;
+  }
+
+  .btn {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+
+  .hero-section {
+    padding: 40px 0;
+  }
+
+  .hero-container {
+    padding: 0 16px;
+  }
+
+  .hero-title {
+    font-size: 32px;
+  }
+}

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create your InboxFlow Account</title>
+  <link rel="stylesheet" href="signup.css">
+  <!-- Google Fonts: Roboto and Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="images/inboxflow.svg">
+</head>
+
+<body>
+  <div class="signup-wrapper">
+    <div class="signup-card">
+      <!-- Left Column: Branding and Info -->
+      <div class="card-left">
+        <div class="logo-container">
+          <img src="images/inboxflow.svg" alt="InboxFlow Logo" class="gmail-logo">
+        </div>
+        <h1 class="card-title">Create an InboxFlow Account</h1>
+        <p class="card-subtitle">Enter your name and choose credentials to set up your inbox</p>
+      </div>
+
+      <!-- Right Column: Registration Form -->
+      <div class="card-right">
+        <form id="signup-form" novalidate>
+          <!-- Step 1: First Name & Last Name -->
+          <div class="form-step active" id="step-1">
+            <div class="form-row">
+              <div class="input-group">
+                <input type="text" id="first-name" required placeholder=" ">
+                <label for="first-name">First name</label>
+                <div class="error-msg" id="first-name-error"></div>
+              </div>
+              <div class="input-group">
+                <input type="text" id="last-name" placeholder=" ">
+                <label for="last-name">Last name (optional)</label>
+              </div>
+            </div>
+            <div class="form-actions">
+              <a href="signin.html" class="btn-back">Sign in</a>
+              <button type="button" class="btn-next" id="btn-step-1-next">Next</button>
+            </div>
+          </div>
+
+          <!-- Step 2: Date of Birth -->
+          <div class="form-step" id="step-2" style="display: none;">
+            <div class="form-row">
+              <!-- Month Select -->
+              <div class="input-group dob-month-group">
+                <select id="dob-month" required>
+                  <option value="" disabled selected hidden></option>
+                  <option value="0">January</option>
+                  <option value="1">February</option>
+                  <option value="2">March</option>
+                  <option value="3">April</option>
+                  <option value="4">May</option>
+                  <option value="5">June</option>
+                  <option value="6">July</option>
+                  <option value="7">August</option>
+                  <option value="8">September</option>
+                  <option value="9">October</option>
+                  <option value="10">November</option>
+                  <option value="11">December</option>
+                </select>
+                <label for="dob-month">Month</label>
+                <div class="error-msg" id="dob-month-error"></div>
+              </div>
+
+              <!-- Day Input -->
+              <div class="input-group dob-day-group">
+                <input type="number" id="dob-day" required placeholder=" " min="1" max="31">
+                <label for="dob-day">Day</label>
+                <div class="error-msg" id="dob-day-error"></div>
+              </div>
+
+              <!-- Year Input -->
+              <div class="input-group dob-year-group">
+                <input type="number" id="dob-year" required placeholder=" " min="1900" max="2099">
+                <label for="dob-year">Year</label>
+                <div class="error-msg" id="dob-year-error"></div>
+              </div>
+            </div>
+            <div class="error-msg" id="dob-general-error"></div>
+            <div class="form-actions">
+              <button type="button" class="btn-back" id="btn-step-2-back">Back</button>
+              <button type="button" class="btn-next" id="btn-step-2-next">Next</button>
+            </div>
+          </div>
+
+          <!-- Step 2.5: Age Error screen -->
+          <div class="form-step" id="step-age-error" style="display: none;">
+            <div class="age-error-container">
+              <p class="age-error-text">You cannot create an InboxFlow Account because you do not meet the minimum age
+                requirement.</p>
+            </div>
+            <div class="form-actions" style="justify-content: flex-start;">
+              <button type="button" class="btn-back" id="btn-age-error-back">Go back</button>
+            </div>
+          </div>
+
+          <!-- Step 3: Username -->
+          <div class="form-step" id="step-3" style="display: none;">
+            <div class="input-group full-width username-group">
+              <div class="username-wrapper">
+                <input type="text" id="username" required placeholder=" " autocomplete="username">
+                <label for="username">Username</label>
+                <span class="gmail-domain">@gmail.com</span>
+              </div>
+              <div class="input-info">You can use letters, numbers & periods</div>
+              <div class="error-msg" id="username-error"></div>
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn-back" id="btn-step-3-back">Back</button>
+              <button type="button" class="btn-next" id="btn-step-3-next">Next</button>
+            </div>
+          </div>
+
+          <!-- Step 4: Password & Confirm -->
+          <div class="form-step" id="step-4" style="display: none;">
+            <div class="form-row password-row">
+              <div class="input-group password-toggle-group">
+                <input type="password" id="password" required placeholder=" " autocomplete="new-password">
+                <label for="password">Password</label>
+                <img src="images/eye-slash-regular-full.svg" alt="Show Password" class="password-toggle-icon"
+                  id="toggle-password">
+                <div class="error-msg" id="password-error"></div>
+              </div>
+              <div class="input-group password-toggle-group">
+                <input type="password" id="confirm-password" required placeholder=" " autocomplete="new-password">
+                <label for="confirm-password">Confirm</label>
+                <img src="images/eye-slash-regular-full.svg" alt="Show Password" class="password-toggle-icon"
+                  id="toggle-confirm-password">
+                <div class="error-msg" id="confirm-password-error"></div>
+              </div>
+            </div>
+
+            <!-- Password Strength Indicator -->
+            <div class="strength-container" id="strength-container">
+              <div class="strength-bar-wrapper">
+                <div class="strength-bar" id="strength-bar"></div>
+              </div>
+              <span class="strength-text" id="strength-text">Password strength</span>
+            </div>
+
+            <div class="form-actions">
+              <button type="button" class="btn-back" id="btn-step-4-back">Back</button>
+              <button type="submit" class="btn-next" id="btn-submit">Create</button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+    </div>
+
+    <script src="signup.js"></script>
+</body>
+
+</html>

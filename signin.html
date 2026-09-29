@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InboxFlow - Sign in</title>
+  <link rel="stylesheet" href="signin.css">
+  <!-- Google Fonts: Roboto and Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="images/inboxflow.svg">
+</head>
+
+<body>
+  <div class="signin-wrapper">
+    <div class="signin-card">
+      <!-- Left Column: Branding and Info -->
+      <div class="card-left">
+        <div class="logo-container">
+          <img src="images/inboxflow.svg" alt="InboxFlow Logo" class="gmail-logo">
+        </div>
+        <h1 class="card-title">Sign in</h1>
+        <p class="card-subtitle">to continue to InboxFlow</p>
+      </div>
+
+      <!-- Right Column: Login Form -->
+      <div class="card-right">
+        <form id="signin-form" novalidate>
+          <!-- Email / Username Input -->
+          <div class="input-group full-width">
+            <input type="text" id="email" required placeholder=" " autocomplete="email">
+            <label for="email">Email or username</label>
+            <div class="error-msg" id="email-error"></div>
+          </div>
+
+          <!-- Password Input -->
+          <div class="input-group full-width password-toggle-group">
+            <input type="password" id="password" required placeholder=" " autocomplete="current-password">
+            <label for="password">Enter your password</label>
+            <img src="images/eye-slash-regular-full.svg" alt="Show Password" class="password-toggle-icon"
+              id="toggle-password">
+            <div class="error-msg" id="password-error"></div>
+          </div>
+
+          <!-- Form Action Button -->
+          <div class="form-actions">
+            <a href="signup.html" class="btn-create-acc">Create account</a>
+            <button type="submit" class="btn-next" id="btn-submit">Next</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="signin.js"></script>
+</body>
+
+</html>
