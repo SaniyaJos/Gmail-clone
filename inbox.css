@@ -788,11 +788,55 @@ body {
   flex: 1;
 }
 
+.details-subject-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
 .details-subject {
   font-size: 22px;
   font-weight: 400;
-  margin-bottom: 20px;
+  margin: 0;
   color: var(--color-text-dark);
+}
+
+.details-star-button {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.details-star-button:hover {
+  background-color: rgba(60, 64, 67, 0.08);
+}
+
+.details-star-button:disabled {
+  cursor: wait;
+}
+
+.details-star-icon {
+  width: 20px;
+  height: 20px;
+  opacity: 0.4;
+  transition: transform 0.1s ease, opacity 0.1s ease;
+}
+
+.details-star-button:hover .details-star-icon {
+  transform: scale(1.1);
+  opacity: 0.8;
+}
+
+.details-star-icon.starred {
+  opacity: 1;
+  filter: invert(82%) sepia(56%) saturate(1478%) hue-rotate(346deg) brightness(104%) contrast(97%);
 }
 
 .details-sender-info {

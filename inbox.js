@@ -91,6 +91,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const emailDetailsModal = document.getElementById('email-details-modal');
   const btnDetailsBack = document.getElementById('btn-details-back');
   const detailsActionDelete = document.getElementById('details-action-delete');
+  const detailsStarButton = document.getElementById('details-star-button');
+  const detailsStarIcon = detailsStarButton.querySelector('.details-star-icon');
   const detailsSubject = document.getElementById('details-subject');
   const detailsSenderAvatar = document.getElementById('details-sender-avatar');
   const detailsSenderName = document.getElementById('details-sender-name');
@@ -229,12 +231,12 @@ document.addEventListener('DOMContentLoaded', () => {
       // Determine sender display: if user is sender, display receiver email
       let displaySender = email.sender === userEmail ? `To: ${email.receiver}` : email.firstName || email.sender.split('@')[0];
 
-      // Check if starred (visual only, functionality disabled)
+      // Show the current starred state
       const starClass = email.isStarred ? 'starred' : '';
 
       li.innerHTML = `
         <input type="checkbox" class="email-row-select" data-id="${email._id}" aria-label="Select mail">
-        <img src="images/star-regular-full.svg" alt="Star" class="email-row-star ${starClass}" data-id="${email._id}">
+        <img src="images/star-regular-full.svg" alt="Star" role="button" tabindex="0" aria-label="${email.isStarred ? 'Unstar email' : 'Star email'}" class="email-row-star ${starClass}" data-id="${email._id}">
         <div class="email-sender">${displaySender}</div>
         <div class="email-content">
           <span class="email-subject">${email.subject}</span>
@@ -247,6 +249,37 @@ document.addEventListener('DOMContentLoaded', () => {
           </button>
         </div>
       `;
+
+      // Toggle the star without triggering the row's open-email action
+      const star = li.querySelector('.email-row-star');
+      const toggleStar = async (event) => {
+        event.stopPropagation();
+
+        if (event.type === 'keydown') {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+        }
+
+        const previousState = email.isStarred;
+        const nextState = !previousState;
+        email.isStarred = nextState;
+        star.classList.toggle('starred', nextState);
+        star.setAttribute('aria-label', nextState ? 'Unstar email' : 'Star email');
+
+        const result = await updateEmailStatus(email._id, { isStarred: nextState });
+        if (!result || !result.email) {
+          email.isStarred = previousState;
+          star.classList.toggle('starred', previousState);
+          star.setAttribute('aria-label', previousState ? 'Unstar email' : 'Star email');
+          return;
+        }
+
+        email.isStarred = result.email.isStarred;
+        fetchEmails(activeFolder);
+      };
+
+      star.addEventListener('click', toggleStar);
+      star.addEventListener('keydown', toggleStar);
 
       // Select Checkbox Event
       const cb = li.querySelector('.email-row-select');
@@ -291,6 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
     emailDetailsModal.style.display = 'flex';
 
     detailsSubject.textContent = email.subject;
+    setDetailsStarState(email.isStarred);
     const senderName = email.firstName || email.sender.split('@')[0];
     detailsSenderAvatar.textContent = senderName[0].toUpperCase();
     detailsSenderName.textContent = senderName;
@@ -305,10 +339,44 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function setDetailsStarState(isStarred) {
+    detailsStarIcon.classList.toggle('starred', isStarred);
+    detailsStarButton.setAttribute('aria-pressed', String(isStarred));
+    detailsStarButton.setAttribute('aria-label', isStarred ? 'Unstar email' : 'Star email');
+    detailsStarButton.title = isStarred ? 'Unstar email' : 'Star email';
+  }
+
   // Details Modal close and Delete handlers
   btnDetailsBack.addEventListener('click', () => {
     closeDetailsModal();
     fetchEmails(activeFolder);
+  });
+
+  detailsStarButton.addEventListener('click', async (event) => {
+    event.stopPropagation();
+    if (!currentOpenEmail) return;
+
+    const email = currentOpenEmail;
+    const previousState = Boolean(email.isStarred);
+    const nextState = !previousState;
+    email.isStarred = nextState;
+    setDetailsStarState(nextState);
+    detailsStarButton.disabled = true;
+
+    try {
+      const result = await updateEmailStatus(email._id, { isStarred: nextState });
+      if (!result || !result.email) {
+        email.isStarred = previousState;
+        setDetailsStarState(previousState);
+        return;
+      }
+
+      email.isStarred = result.email.isStarred;
+      setDetailsStarState(email.isStarred);
+      fetchEmails(activeFolder);
+    } finally {
+      detailsStarButton.disabled = false;
+    }
   });
 
   detailsActionDelete.addEventListener('click', async () => {
