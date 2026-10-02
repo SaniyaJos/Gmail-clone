@@ -72,6 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const mailCountRange = document.getElementById('mail-count-range');
   const selectAllCheckbox = document.getElementById('select-all');
   const deleteActionBarBtn = document.getElementById('action-delete');
+  const restoreActionBarBtn = document.getElementById('action-restore');
   const refreshActionBarBtn = document.getElementById('action-refresh');
 
   // Compose Modal Elements
@@ -90,6 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Details Modal Elements
   const emailDetailsModal = document.getElementById('email-details-modal');
   const btnDetailsBack = document.getElementById('btn-details-back');
+  const detailsActionRestore = document.getElementById('details-action-restore');
   const detailsActionDelete = document.getElementById('details-action-delete');
   const detailsStarButton = document.getElementById('details-star-button');
   const detailsStarIcon = detailsStarButton.querySelector('.details-star-icon');
@@ -126,13 +128,13 @@ document.addEventListener('DOMContentLoaded', () => {
       // Clear selections
       selectedEmailIds.clear();
       selectAllCheckbox.checked = false;
-      updateDeleteButtonState();
 
       // Toggle active states
       navItems.forEach(nav => nav.classList.remove('active'));
       item.classList.add('active');
 
       activeFolder = item.getAttribute('data-folder');
+      updateDeleteButtonState();
       
       // Close details modal if open
       closeDetailsModal();
@@ -168,13 +170,14 @@ document.addEventListener('DOMContentLoaded', () => {
   deleteActionBarBtn.addEventListener('click', async () => {
     if (selectedEmailIds.size === 0) return;
 
-    if (confirm(`Move ${selectedEmailIds.size} email(s) to Bin?`)) {
+    const confirmationMessage = activeFolder === 'bin'
+      ? `Permanently delete ${selectedEmailIds.size} email(s)?`
+      : `Move ${selectedEmailIds.size} email(s) to Bin?`;
+    if (confirm(confirmationMessage)) {
       const promises = Array.from(selectedEmailIds).map(id => {
         if (activeFolder === 'bin') {
-          // If already in Bin, delete permanently
           return deleteEmailPermanently(id);
         } else {
-          // Otherwise move to Bin
           return updateEmailStatus(id, { isTrash: true });
         }
       });
@@ -185,6 +188,16 @@ document.addEventListener('DOMContentLoaded', () => {
       updateDeleteButtonState();
       fetchEmails(activeFolder);
     }
+  });
+
+  restoreActionBarBtn.addEventListener('click', async () => {
+    if (activeFolder !== 'bin' || selectedEmailIds.size === 0) return;
+
+    await Promise.all(Array.from(selectedEmailIds).map(id => restoreEmail(id)));
+    selectedEmailIds.clear();
+    selectAllCheckbox.checked = false;
+    updateDeleteButtonState();
+    fetchEmails(activeFolder);
   });
 
   // Core API Fetch function
@@ -233,53 +246,69 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Show the current starred state
       const starClass = email.isStarred ? 'starred' : '';
+      const starControl = activeFolder === 'bin'
+        ? ''
+        : `<img src="images/star-regular-full.svg" alt="Star" role="button" tabindex="0" aria-label="${email.isStarred ? 'Unstar email' : 'Star email'}" class="email-row-star ${starClass}" data-id="${email._id}">`;
+
+      const rowActions = activeFolder === 'bin'
+        ? `
+          <button class="action-icon-btn btn-row-restore" data-id="${email._id}" title="Restore">
+            <span class="restore-icon" aria-hidden="true">&#8630;</span>
+          </button>
+          <button class="action-icon-btn btn-row-delete" data-id="${email._id}" title="Permanently delete">
+            <img src="images/trash-can-regular-full.svg" alt="Delete permanently" class="row-action-icon-img">
+          </button>
+        `
+        : `
+          <button class="action-icon-btn btn-row-delete" data-id="${email._id}" title="Move to Bin">
+            <img src="images/trash-can-regular-full.svg" alt="Move to Bin" class="row-action-icon-img">
+          </button>
+        `;
 
       li.innerHTML = `
         <input type="checkbox" class="email-row-select" data-id="${email._id}" aria-label="Select mail">
-        <img src="images/star-regular-full.svg" alt="Star" role="button" tabindex="0" aria-label="${email.isStarred ? 'Unstar email' : 'Star email'}" class="email-row-star ${starClass}" data-id="${email._id}">
+        ${starControl}
         <div class="email-sender">${displaySender}</div>
         <div class="email-content">
           <span class="email-subject">${email.subject}</span>
           <span class="email-snippet">— ${email.body.substring(0, 80)}</span>
         </div>
         <div class="email-date">${formattedDate}</div>
-        <div class="email-row-actions">
-          <button class="action-icon-btn btn-row-delete" data-id="${email._id}" title="Move to Bin">
-            <img src="images/trash-can-regular-full.svg" alt="Delete" class="row-action-icon-img">
-          </button>
-        </div>
+        <div class="email-row-actions">${rowActions}</div>
       `;
 
       // Toggle the star without triggering the row's open-email action
       const star = li.querySelector('.email-row-star');
-      const toggleStar = async (event) => {
-        event.stopPropagation();
+      if (star) {
+        const toggleStar = async (event) => {
+          event.stopPropagation();
 
-        if (event.type === 'keydown') {
-          if (event.key !== 'Enter' && event.key !== ' ') return;
-          event.preventDefault();
-        }
+          if (event.type === 'keydown') {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+          }
 
-        const previousState = email.isStarred;
-        const nextState = !previousState;
-        email.isStarred = nextState;
-        star.classList.toggle('starred', nextState);
-        star.setAttribute('aria-label', nextState ? 'Unstar email' : 'Star email');
+          const previousState = email.isStarred;
+          const nextState = !previousState;
+          email.isStarred = nextState;
+          star.classList.toggle('starred', nextState);
+          star.setAttribute('aria-label', nextState ? 'Unstar email' : 'Star email');
 
-        const result = await updateEmailStatus(email._id, { isStarred: nextState });
-        if (!result || !result.email) {
-          email.isStarred = previousState;
-          star.classList.toggle('starred', previousState);
-          star.setAttribute('aria-label', previousState ? 'Unstar email' : 'Star email');
-          return;
-        }
+          const result = await updateEmailStatus(email._id, { isStarred: nextState });
+          if (!result || !result.email) {
+            email.isStarred = previousState;
+            star.classList.toggle('starred', previousState);
+            star.setAttribute('aria-label', previousState ? 'Unstar email' : 'Star email');
+            return;
+          }
 
-        email.isStarred = result.email.isStarred;
-        fetchEmails(activeFolder);
-      };
+          email.isStarred = result.email.isStarred;
+          fetchEmails(activeFolder);
+        };
 
-      star.addEventListener('click', toggleStar);
-      star.addEventListener('keydown', toggleStar);
+        star.addEventListener('click', toggleStar);
+        star.addEventListener('keydown', toggleStar);
+      }
 
       // Select Checkbox Event
       const cb = li.querySelector('.email-row-select');
@@ -309,6 +338,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
 
+      const restoreBtn = li.querySelector('.btn-row-restore');
+      if (restoreBtn) {
+        restoreBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          await restoreEmail(restoreBtn.getAttribute('data-id'));
+          fetchEmails(activeFolder);
+        });
+      }
+
       // Open Email detailed overlay on row click
       li.addEventListener('click', () => {
         openEmailDetails(email);
@@ -322,6 +360,9 @@ document.addEventListener('DOMContentLoaded', () => {
   async function openEmailDetails(email) {
     currentOpenEmail = email;
     emailDetailsModal.style.display = 'flex';
+    detailsActionRestore.style.display = activeFolder === 'bin' ? 'inline-flex' : 'none';
+    detailsActionDelete.title = activeFolder === 'bin' ? 'Permanently delete' : 'Move to Bin';
+    detailsStarButton.style.display = activeFolder === 'bin' ? 'none' : 'inline-flex';
 
     detailsSubject.textContent = email.subject;
     setDetailsStarState(email.isStarred);
@@ -354,7 +395,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   detailsStarButton.addEventListener('click', async (event) => {
     event.stopPropagation();
-    if (!currentOpenEmail) return;
+    if (!currentOpenEmail || activeFolder === 'bin') return;
 
     const email = currentOpenEmail;
     const previousState = Boolean(email.isStarred);
@@ -393,6 +434,14 @@ document.addEventListener('DOMContentLoaded', () => {
       closeDetailsModal();
       fetchEmails(activeFolder);
     }
+  });
+
+  detailsActionRestore.addEventListener('click', async () => {
+    if (!currentOpenEmail || activeFolder !== 'bin') return;
+
+    await restoreEmail(currentOpenEmail._id);
+    closeDetailsModal();
+    fetchEmails(activeFolder);
   });
 
   function closeDetailsModal() {
@@ -618,13 +667,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  async function restoreEmail(id) {
+    return updateEmailStatus(id, { isTrash: false });
+  }
+
   // UI state change helpers
   function updateDeleteButtonState() {
+    const hasSelection = selectedEmailIds.size > 0;
     if (selectedEmailIds.size > 0) {
       deleteActionBarBtn.removeAttribute('disabled');
     } else {
       deleteActionBarBtn.setAttribute('disabled', 'true');
     }
+    restoreActionBarBtn.disabled = !hasSelection;
+    restoreActionBarBtn.style.display = activeFolder === 'bin' ? 'flex' : 'none';
+    deleteActionBarBtn.title = activeFolder === 'bin' ? 'Permanently delete' : 'Move to Bin';
   }
 
   function showEmptyState(folder) {
