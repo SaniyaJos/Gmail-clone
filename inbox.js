@@ -60,6 +60,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // State Management
   let activeFolder = 'inbox';
+  let activeSearchQuery = '';
+  let searchDebounceTimer;
+  let emailFetchSequence = 0;
   let emailListCache = [];
   let selectedEmailIds = new Set();
   let currentOpenEmail = null;
@@ -70,6 +73,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const mailListWrapper = document.getElementById('mail-list-wrapper');
   const emailListUl = document.getElementById('email-list');
   const mailCountRange = document.getElementById('mail-count-range');
+  const searchInput = document.getElementById('search-input');
+  const filterToggle = document.getElementById('filter-toggle');
+  const searchFilterPanel = document.getElementById('search-filter-panel');
+  const searchFilterForm = document.getElementById('search-filter-panel');
   const selectAllCheckbox = document.getElementById('select-all');
   const deleteActionBarBtn = document.getElementById('action-delete');
   const refreshActionBarBtn = document.getElementById('action-refresh');
@@ -112,6 +119,76 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       document.querySelector('.app-container').classList.toggle('collapsed');
       sidebar.classList.remove('open');
+    }
+  });
+
+  searchInput.addEventListener('input', () => {
+    window.clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = window.setTimeout(applySearch, 300);
+  });
+
+  searchInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      window.clearTimeout(searchDebounceTimer);
+      applySearch();
+    } else if (event.key === 'Escape' && activeSearchQuery) {
+      searchInput.value = '';
+      activeSearchQuery = '';
+      window.clearTimeout(searchDebounceTimer);
+      applySearch();
+    }
+  });
+
+  searchInput.addEventListener('search', () => {
+    if (!searchInput.value.trim() && activeSearchQuery) {
+      activeSearchQuery = '';
+      applySearch();
+    }
+  });
+
+  filterToggle.addEventListener('click', () => {
+    const isOpen = !searchFilterPanel.hidden;
+    searchFilterPanel.hidden = isOpen;
+    filterToggle.setAttribute('aria-expanded', String(!isOpen));
+  });
+
+  searchFilterForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const criteria = [
+      ['filter-from', 'from'],
+      ['filter-to', 'to'],
+      ['filter-subject', 'subject'],
+      ['filter-words', ''],
+      ['filter-exclude', '-']
+    ];
+    const terms = criteria.flatMap(([id, operator]) => {
+      const value = document.getElementById(id).value.trim();
+      if (!value) return [];
+      const quotedValue = `"${value.replace(/"/g, '')}"`;
+      return [operator === '-'
+        ? `-${quotedValue}`
+        : `${operator ? `${operator}:` : ''}${quotedValue}`];
+    });
+
+    searchInput.value = terms.join(' ');
+    window.clearTimeout(searchDebounceTimer);
+    searchFilterPanel.hidden = true;
+    filterToggle.setAttribute('aria-expanded', 'false');
+    applySearch();
+  });
+
+  document.getElementById('filter-clear').addEventListener('click', () => {
+    searchFilterForm.reset();
+    searchInput.value = '';
+    window.clearTimeout(searchDebounceTimer);
+    applySearch();
+  });
+
+  document.addEventListener('click', (event) => {
+    if (!searchFilterPanel.hidden && !searchFilterPanel.contains(event.target) && !filterToggle.contains(event.target)) {
+      searchFilterPanel.hidden = true;
+      filterToggle.setAttribute('aria-expanded', 'false');
     }
   });
 
@@ -189,12 +266,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Core API Fetch function
   async function fetchEmails(folder) {
+    const requestSequence = ++emailFetchSequence;
     try {
-      const response = await fetch(`http://localhost:5000/api/emails?email=${encodeURIComponent(userEmail)}&folder=${folder}`);
+      const params = new URLSearchParams({ email: userEmail, folder });
+      if (activeSearchQuery) params.set('q', activeSearchQuery);
+      const response = await fetch(`http://localhost:5000/api/emails?${params}`);
       if (!response.ok) {
         throw new Error('Failed to retrieve emails');
       }
       const data = await response.json();
+      if (requestSequence !== emailFetchSequence) return;
       emailListCache = data;
       renderEmailList(data);
     } catch (err) {
@@ -202,15 +283,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function applySearch() {
+    activeSearchQuery = searchInput.value.trim();
+    selectedEmailIds.clear();
+    selectAllCheckbox.checked = false;
+    updateDeleteButtonState();
+    closeDetailsModal();
+    fetchEmails(activeFolder);
+  }
+
   // Render Email List inside UI
   function renderEmailList(emails) {
     emailListUl.innerHTML = '';
     
     // Update Badge counts for Inbox and Drafts
-    updateFolderBadges(emails);
+    if (!activeSearchQuery) updateFolderBadges(emails);
 
     if (emails.length === 0) {
-      showEmptyState(activeFolder);
+      showEmptyState(activeFolder, Boolean(activeSearchQuery));
       mailCountRange.textContent = '0-0 of 0';
       return;
     }
@@ -627,12 +717,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function showEmptyState(folder) {
+  function showEmptyState(folder, searching = false) {
     emptyStateView.style.display = 'flex';
     mailListWrapper.style.display = 'none';
 
     const title = emptyStateView.querySelector('.empty-title');
     const subtitle = emptyStateView.querySelector('.empty-subtitle');
+
+    if (searching) {
+      title.textContent = 'No matching messages';
+      subtitle.textContent = 'Try different search terms or check the spelling.';
+      return;
+    }
 
     switch (folder) {
       case 'inbox':

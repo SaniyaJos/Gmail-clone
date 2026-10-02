@@ -30,9 +30,22 @@
       <div class="header-center">
         <div class="search-bar">
           <img src="images/magnifying-glass-solid-full.svg" alt="Search" class="search-bar-icon">
-          <input type="text" id="search-input" placeholder="Search mail" aria-label="Search mail">
-          <img src="images/sliders-solid-full.svg" alt="Filter" class="filter-bar-icon">
+          <input type="search" id="search-input" placeholder="Search mail" aria-label="Search mail">
+          <button type="button" class="filter-toggle" id="filter-toggle" aria-label="Advanced search" aria-expanded="false" title="Advanced search">
+            <img src="images/sliders-solid-full.svg" alt="" class="filter-bar-icon">
+          </button>
         </div>
+        <form class="search-filter-panel" id="search-filter-panel" hidden>
+          <label>From<input type="text" id="filter-from" autocomplete="off"></label>
+          <label>To<input type="text" id="filter-to" autocomplete="off"></label>
+          <label>Subject<input type="text" id="filter-subject" autocomplete="off"></label>
+          <label>Has the words<input type="text" id="filter-words" autocomplete="off"></label>
+          <label>Doesn't have<input type="text" id="filter-exclude" autocomplete="off"></label>
+          <div class="search-filter-actions">
+            <button type="button" id="filter-clear">Clear</button>
+            <button type="submit">Search</button>
+          </div>
+        </form>
       </div>
       
       <div class="header-right">

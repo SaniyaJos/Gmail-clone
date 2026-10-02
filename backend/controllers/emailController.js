@@ -79,9 +79,46 @@ async function createEmail(req, res) {
   }
 }
 
+function buildEmailSearchFilter(queryEmail, folder, searchQuery) {
+  const conditions = [{ isTrash: folder === 'bin' }];
+  const tokens = searchQuery.match(/(?:\w+:)?-?(?:"[^"]+"|\S+)/g) || [];
+  const searchableFields = ['sender', 'receiver', 'subject', 'body'];
+
+  tokens.forEach(token => {
+    const separator = token.indexOf(':');
+    const qualifier = separator > 0 ? token.slice(0, separator).toLowerCase() : '';
+    const rawValue = separator > 0 ? token.slice(separator + 1) : token;
+    const excluded = !qualifier && rawValue.startsWith('-');
+    const value = (excluded ? rawValue.slice(1) : rawValue).replace(/^"|"$/g, '');
+    if (!value) return;
+
+    const expression = new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+    if (excluded) {
+      conditions.push({ $nor: searchableFields.map(field => ({ [field]: expression })) });
+    } else if (qualifier === 'from') {
+      conditions.push({ sender: expression });
+    } else if (qualifier === 'to') {
+      conditions.push({ receiver: expression });
+    } else if (qualifier === 'subject') {
+      conditions.push({ subject: expression });
+    } else if (qualifier === 'is' && value.toLowerCase() === 'starred') {
+      conditions.push({ isStarred: true });
+    } else if (qualifier === 'is' && value.toLowerCase() === 'unread') {
+      conditions.push({ isRead: false });
+    } else if (qualifier === 'is' && value.toLowerCase() === 'read') {
+      conditions.push({ isRead: true });
+    } else {
+      conditions.push({ $or: searchableFields.map(field => ({ [field]: expression })) });
+    }
+  });
+
+  return { owner: queryEmail, $and: conditions };
+}
+
 async function getEmails(req, res) {
   try {
-    const { email, folder } = req.query;
+    const { email, folder, q } = req.query;
 
     if (!email) {
       return res.status(400).json({ message: 'User email query parameter is required' });
@@ -89,6 +126,13 @@ async function getEmails(req, res) {
 
     const queryEmail = email.toLowerCase();
     const filter = { owner: queryEmail };
+
+    if (typeof q === 'string' && q.trim()) {
+      const emails = await Email.find(buildEmailSearchFilter(queryEmail, folder, q.trim()))
+        .sort({ timestamp: -1 })
+        .lean();
+      return res.status(200).json(await addSenderNames(emails));
+    }
 
     switch (folder) {
       case 'inbox':
