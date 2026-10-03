@@ -323,6 +323,11 @@ body {
   transition: background-color var(--transition-speed);
 }
 
+.restore-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
 .action-icon-btn:hover:not(:disabled) {
   background-color: rgba(60,64,67,0.08);
   color: var(--color-text-dark);
