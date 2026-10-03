@@ -17,7 +17,8 @@ async function createEmail(req, res) {
   try {
     const { sender, receiver, subject, body, isDraft } = req.body;
 
-    if (!sender || !receiver) {
+    // Drafts may be saved without a receiver; real emails need one
+    if (!sender || (!receiver && !isDraft)) {
       return res.status(400).json({ message: 'Sender and Receiver are required' });
     }
 
@@ -27,7 +28,7 @@ async function createEmail(req, res) {
       savedEmail = new Email({
         owner: sender.toLowerCase(),
         sender,
-        receiver,
+        receiver: receiver || '',
         subject: subject || '(No Subject)',
         body: body || '',
         isDraft: true
@@ -81,6 +82,11 @@ async function createEmail(req, res) {
 
 function buildEmailSearchFilter(queryEmail, folder, searchQuery) {
   const conditions = [{ isTrash: folder === 'bin' }];
+
+  // Keep drafts out of normal search results; the Drafts folder searches only drafts
+  if (folder !== 'bin') {
+    conditions.push({ isDraft: folder === 'drafts' });
+  }
   const tokens = searchQuery.match(/(?:\w+:)?-?(?:"[^"]+"|\S+)/g) || [];
   const searchableFields = ['sender', 'receiver', 'subject', 'body'];
 
@@ -289,6 +295,39 @@ async function updateEmail(req, res) {
   }
 }
 
+async function updateDraft(req, res) {
+  const { id } = req.params;
+
+  if (!mongoose.isValidObjectId(id)) {
+    return res.status(400).json({ message: 'Invalid email ID' });
+  }
+
+  try {
+    const { receiver, subject, body } = req.body;
+
+    // Only documents that are still drafts can be edited this way
+    const draft = await Email.findOneAndUpdate(
+      { _id: id, isDraft: true },
+      {
+        receiver: receiver || '',
+        subject: subject || '(No Subject)',
+        body: body || '',
+        timestamp: Date.now()
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!draft) {
+      return res.status(404).json({ message: 'Draft not found' });
+    }
+
+    return res.status(200).json({ message: 'Draft updated successfully', email: draft });
+  } catch (err) {
+    console.error('Update draft error:', err);
+    return res.status(500).json({ message: 'Internal server error while updating draft' });
+  }
+}
+
 async function deleteEmail(req, res) {
   const { id } = req.params;
 
@@ -318,5 +357,6 @@ module.exports = {
   unstarEmail,
   toggleStarredEmail,
   updateEmail,
+  updateDraft,
   deleteEmail
 };
