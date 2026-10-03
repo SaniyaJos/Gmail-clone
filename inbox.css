@@ -100,6 +100,7 @@ body {
   flex: 1;
   max-width: 720px;
   padding: 0 16px;
+  position: relative;
 }
 
 .search-bar {
@@ -131,6 +132,72 @@ body {
   font-size: 16px;
   color: var(--color-text-dark);
   font-family: inherit;
+}
+
+.filter-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.filter-toggle:hover {
+  background-color: rgba(60, 64, 67, 0.08);
+}
+
+.search-filter-panel {
+  position: absolute;
+  z-index: 20;
+  top: 58px;
+  right: 16px;
+  width: min(360px, calc(100vw - 32px));
+  padding: 18px;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(60, 64, 67, 0.24);
+}
+
+.search-filter-panel:not([hidden]) {
+  display: grid;
+  gap: 12px;
+}
+
+.search-filter-panel label {
+  display: grid;
+  gap: 5px;
+  color: var(--color-text-medium);
+  font-size: 12px;
+}
+
+.search-filter-panel input {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 0;
+  border-bottom: 1px solid #dadce0;
+  color: var(--color-text-dark);
+  font: inherit;
+}
+
+.search-filter-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.search-filter-actions button {
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 4px;
+  background: #e8f0fe;
+  color: #174ea6;
+  cursor: pointer;
 }
 
 .filter-icon {
