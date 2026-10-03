@@ -1221,3 +1221,9 @@ body {
   background-color: #f2f6fc;
   border-color: #0b57d0;
 }
+
+/* Drafts */
+.draft-label {
+  color: #d93025;
+  font-weight: 500;
+}

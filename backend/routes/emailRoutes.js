@@ -9,6 +9,7 @@ router.get('/', emailController.getEmails);
 router.patch('/:id/star', emailController.starEmail);
 router.patch('/:id/unstar', emailController.unstarEmail);
 router.patch('/:id/toggle-starred', emailController.toggleStarredEmail);
+router.patch('/:id/draft', emailController.updateDraft);
 router.patch('/:id', emailController.updateEmail);
 router.delete('/:id', emailController.deleteEmail);
 

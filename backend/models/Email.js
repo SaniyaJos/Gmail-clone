@@ -14,7 +14,9 @@ const emailSchema = new mongoose.Schema({
   },
   receiver: {
     type: String,
-    required: [true, 'Receiver email is required'],
+    // A draft is allowed to be saved before a recipient is chosen
+    required: [function () { return !this.isDraft; }, 'Receiver email is required'],
+    default: '',
     trim: true,
     lowercase: true
   },

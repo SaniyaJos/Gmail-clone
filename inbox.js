@@ -66,6 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let emailListCache = [];
   let selectedEmailIds = new Set();
   let currentOpenEmail = null;
+  let currentDraftId = null; // _id of the draft being edited in the compose modal (null = new message)
 
   // DOM Elements
   const navItems = document.querySelectorAll('.nav-item');
@@ -291,6 +292,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (requestSequence !== emailFetchSequence) return;
       emailListCache = data;
       renderEmailList(data);
+      if (folder !== 'drafts') refreshDraftBadge();
     } catch (err) {
       console.error('Error fetching emails:', err);
     }
@@ -326,13 +328,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     emails.forEach(email => {
       const li = document.createElement('li');
-      li.className = `email-row ${email.isRead ? 'read' : 'unread'}`;
+      li.className = `email-row ${email.isRead || email.isDraft ? 'read' : 'unread'}`;
       li.setAttribute('data-id', email._id);
 
       const formattedDate = formatTimestamp(email.timestamp);
 
       // Determine sender display: if user is sender, display receiver email
       let displaySender = email.sender === userEmail ? `To: ${email.receiver}` : email.firstName || email.sender.split('@')[0];
+      if (email.isDraft) {
+        displaySender = '<span class="draft-label">Draft</span>';
+      }
 
       // Show the current starred state
       const starClass = email.isStarred ? 'starred' : '';
@@ -439,7 +444,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Open Email detailed overlay on row click
       li.addEventListener('click', () => {
-        openEmailDetails(email);
+        if (activeFolder === 'drafts' && email.isDraft) {
+          openDraftInCompose(email);
+        } else {
+          openEmailDetails(email);
+        }
       });
 
       emailListUl.appendChild(li);
@@ -549,8 +558,10 @@ document.addEventListener('DOMContentLoaded', () => {
     emailToInput.focus();
   });
 
-  composeCloseBtn.addEventListener('click', () => {
+  composeCloseBtn.addEventListener('click', async () => {
+    await saveDraft();
     closeComposeModal();
+    fetchEmails(activeFolder);
   });
 
   composeMinimizeBtn.addEventListener('click', () => {
@@ -570,8 +581,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  composeDiscardBtn.addEventListener('click', () => {
+  composeDiscardBtn.addEventListener('click', async () => {
+    if (currentDraftId) {
+      await deleteEmailPermanently(currentDraftId);
+    }
     closeComposeModal();
+    fetchEmails(activeFolder);
   });
 
   const addRecipientChip = (email) => {
@@ -711,6 +726,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (anySuccess) {
+      // If this message started as a draft, remove the draft now that it has been sent
+      if (currentDraftId) {
+        await deleteEmailPermanently(currentDraftId);
+      }
       alert('Email sent successfully!');
       closeComposeModal();
       fetchEmails(activeFolder);
@@ -721,7 +740,98 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // ---------- Drafts ----------
+
+  // Read whatever is currently in the compose form (chips + any text typed but not yet confirmed)
+  function getComposeData() {
+    const recipients = Array.from(chipsContainer.querySelectorAll('.recipient-chip')).map(chip => chip.dataset.email);
+    const typedRecipient = emailToInput.value.trim().toLowerCase();
+    if (typedRecipient && !recipients.includes(typedRecipient)) {
+      recipients.push(typedRecipient);
+    }
+    return {
+      receiver: recipients.join(', '),
+      subject: emailSubjectInput.value.trim(),
+      body: emailBodyInput.value
+    };
+  }
+
+  // Save (create or update) the draft; deletes it if the user emptied everything
+  async function saveDraft() {
+    const { receiver, subject, body } = getComposeData();
+    const isEmpty = !receiver && !subject && !body.trim();
+
+    try {
+      if (isEmpty) {
+        if (currentDraftId) await deleteEmailPermanently(currentDraftId);
+        return;
+      }
+
+      if (currentDraftId) {
+        const response = await fetch(`http://localhost:5000/api/emails/${currentDraftId}/draft`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ receiver, subject, body })
+        });
+        if (!response.ok) throw new Error('Failed to update draft');
+      } else {
+        const response = await fetch('http://localhost:5000/api/emails', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sender: userEmail, receiver, subject, body, isDraft: true })
+        });
+        if (!response.ok) throw new Error('Failed to save draft');
+        const data = await response.json();
+        currentDraftId = data.email._id;
+      }
+    } catch (err) {
+      console.error('Error saving draft:', err);
+    }
+  }
+
+  // Open a saved draft inside the compose modal
+  async function openDraftInCompose(draft) {
+    // If another message is already open in the modal, keep it as a draft first
+    if (composeModal.style.display === 'flex') {
+      await saveDraft();
+      closeComposeModal();
+    }
+
+    currentDraftId = draft._id;
+
+    composeModal.classList.remove('maximized');
+    composeModal.classList.remove('minimized');
+    composeMaximizeBtn.textContent = '⤢';
+    composeMaximizeBtn.title = 'Maximize';
+
+    chipsContainer.querySelectorAll('.recipient-chip').forEach(chip => chip.remove());
+    draft.receiver
+      .split(',')
+      .map(r => r.trim())
+      .filter(Boolean)
+      .forEach(addRecipientChip);
+
+    emailSubjectInput.value = draft.subject === '(No Subject)' ? '' : draft.subject;
+    emailBodyInput.value = draft.body;
+
+    composeModal.style.display = 'flex';
+    emailBodyInput.focus();
+  }
+
+  // Show the number of drafts in the sidebar even when another folder is open
+  async function refreshDraftBadge() {
+    try {
+      const response = await fetch(`http://localhost:5000/api/emails?email=${encodeURIComponent(userEmail)}&folder=drafts`);
+      if (!response.ok) return;
+      const drafts = await response.json();
+      document.getElementById('badge-drafts').textContent = drafts.length > 0 ? drafts.length : '';
+    } catch (err) {
+      console.error('Error refreshing drafts badge:', err);
+    }
+  }
+
   function closeComposeModal() {
+    currentDraftId = null;
     composeModal.style.display = 'none';
     composeForm.reset();
     if (chipsContainer) {
