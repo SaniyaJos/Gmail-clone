@@ -1,32 +1,48 @@
-/* JavaScript for Gmail Clone Sign-in validation and API Integration */
+/* JavaScript for Gmail Clone Sign-in Validation and API Integration */
 
 document.addEventListener('DOMContentLoaded', () => {
+
+  // ==========================================
+  // 1. CONFIGURATION & DOM SELECTORS
+  // ==========================================
+  const API_BASE = 'http://localhost:5000/api';
+
   const form = document.getElementById('signin-form');
   const emailInput = document.getElementById('email');
   const passwordInput = document.getElementById('password');
+  const submitBtn = document.getElementById('btn-submit');
 
-  // Error containers
   const emailError = document.getElementById('email-error');
   const passwordError = document.getElementById('password-error');
-
-  // Password toggle elements
   const togglePassword = document.getElementById('toggle-password');
+
+  // ==========================================
+  // 2. UI HELPER FUNCTIONS
+  // ==========================================
+
+  function showError(input, errorElement, message) {
+    input.parentElement.classList.add('invalid');
+    errorElement.textContent = message;
+  }
+
+  function clearError(input, errorElement) {
+    input.parentElement.classList.remove('invalid');
+    errorElement.textContent = '';
+  }
+
+  // ==========================================
+  // 3. INPUT EVENT LISTENERS
+  // ==========================================
 
   // Toggle Password visibility
   togglePassword.addEventListener('click', () => {
-    const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-    passwordInput.setAttribute('type', type);
-
-    if (type === 'password') {
-      togglePassword.src = 'images/eye-slash-regular-full.svg';
-      togglePassword.alt = 'Show Password';
-    } else {
-      togglePassword.src = 'images/eye-regular-full.svg';
-      togglePassword.alt = 'Hide Password';
-    }
+    const isPassword = passwordInput.getAttribute('type') === 'password';
+    passwordInput.setAttribute('type', isPassword ? 'text' : 'password');
+    togglePassword.src = isPassword ? 'images/eye-slash-regular-full.svg' : 'images/eye-regular-full.svg';
+    togglePassword.alt = isPassword ? 'Show Password' : 'Hide Password';
   });
 
-  // Real-time validation clearers
+  // Real-time validation error clearers
   emailInput.addEventListener('input', () => {
     if (emailInput.value.trim() !== '') {
       clearError(emailInput, emailError);
@@ -39,15 +55,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  function showError(input, errorElement, message) {
-    input.parentElement.classList.add('invalid');
-    errorElement.textContent = message;
-  }
-
-  function clearError(input, errorElement) {
-    input.parentElement.classList.remove('invalid');
-    errorElement.textContent = '';
-  }
+  // ==========================================
+  // 4. FORM SUBMIT & AUTHENTICATION HANDLER
+  // ==========================================
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -70,19 +80,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!isValid) return;
 
-    // Normalize email: If user enters just "saniya.test", convert it to "saniya.test@gmail.com"
+    // Normalize email: If user enters just "saniya.test", append "@gmail.com"
     let formattedEmail = emailVal.toLowerCase();
     if (!formattedEmail.includes('@')) {
       formattedEmail = `${formattedEmail}@gmail.com`;
     }
 
-    const submitBtn = document.getElementById('btn-submit');
     submitBtn.textContent = 'Verifying...';
     submitBtn.disabled = true;
 
     try {
       // Connect to Express Sign-in Endpoint
-      const response = await fetch('http://localhost:5000/api/signin', {
+      const response = await fetch(`${API_BASE}/signin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -100,9 +109,9 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('currentUser', JSON.stringify(data.user));
 
         alert(`Welcome back, ${data.user.firstName}! Connecting to your inbox...`);
-        window.location.href = 'inbox.html'; // Redirect to inbox dashboard
+        window.location.href = 'inbox.html';
       } else {
-        // If login failed, determine which field to highlight
+        // If login failed, highlight the relevant field
         if (data.message.toLowerCase().includes('password')) {
           showError(passwordInput, passwordError, data.message);
         } else {
@@ -113,10 +122,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (err) {
       console.error('Error connecting to backend:', err);
-      // Fallback/Simulated login for testing
+
+      // Offline simulation fallback for testing
       alert(`Database/Server Connection Offline!\n\nSimulated Login:\nEmail: ${formattedEmail}\n\n(Ensure your backend server is running to sign in dynamically)`);
 
-      // Simulate save and redirect for styling/ui flow testing
       localStorage.setItem('currentUser', JSON.stringify({
         firstName: 'Test',
         lastName: 'User',
@@ -126,4 +135,5 @@ document.addEventListener('DOMContentLoaded', () => {
       window.location.href = 'inbox.html';
     }
   });
+
 });

@@ -1,35 +1,16 @@
-/* JavaScript for Gmail Clone Signup page validation and API Integration */
+/* JavaScript for Gmail Clone Signup Page Validation and API Integration */
 
 document.addEventListener('DOMContentLoaded', () => {
-  const form = document.getElementById('signup-form');
-  const firstNameInput = document.getElementById('first-name');
-  const lastNameInput = document.getElementById('last-name');
-  const dobMonthSelect = document.getElementById('dob-month');
-  const dobDayInput = document.getElementById('dob-day');
-  const dobYearInput = document.getElementById('dob-year');
-  const usernameInput = document.getElementById('username');
-  const passwordInput = document.getElementById('password');
-  const confirmPasswordInput = document.getElementById('confirm-password');
 
-  // Error containers
-  const firstNameError = document.getElementById('first-name-error');
-  const usernameError = document.getElementById('username-error');
-  const passwordError = document.getElementById('password-error');
-  const confirmPasswordError = document.getElementById('confirm-password-error');
+  // ==========================================
+  // 1. CONFIGURATION & STEP DEFINITIONS
+  // ==========================================
+  const API_BASE = 'http://localhost:5000/api';
 
-  // Password strength elements
-  const strengthContainer = document.getElementById('strength-container');
-  const strengthBar = document.getElementById('strength-bar');
-  const strengthText = document.getElementById('strength-text');
-
-  // Password toggle icons
-  const togglePassword = document.getElementById('toggle-password');
-  const toggleConfirmPassword = document.getElementById('toggle-confirm-password');
-
-  // Regular expression to check username: letters, numbers, and periods only
+  // Allowed username pattern: letters, numbers, and periods only
   const usernameRegex = /^[a-zA-Z0-9.]+$/;
 
-  // Step configuration
+  // Multi-step configuration map
   const steps = {
     1: {
       el: document.getElementById('step-1'),
@@ -58,61 +39,83 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  // Switch step function
+  // ==========================================
+  // 2. DOM ELEMENT SELECTORS
+  // ==========================================
+  const form = document.getElementById('signup-form');
+  const firstNameInput = document.getElementById('first-name');
+  const lastNameInput = document.getElementById('last-name');
+  const dobMonthSelect = document.getElementById('dob-month');
+  const dobDayInput = document.getElementById('dob-day');
+  const dobYearInput = document.getElementById('dob-year');
+  const usernameInput = document.getElementById('username');
+  const passwordInput = document.getElementById('password');
+  const confirmPasswordInput = document.getElementById('confirm-password');
+
+  // Error containers
+  const firstNameError = document.getElementById('first-name-error');
+  const usernameError = document.getElementById('username-error');
+  const passwordError = document.getElementById('password-error');
+  const confirmPasswordError = document.getElementById('confirm-password-error');
+
+  // Password strength elements
+  const strengthContainer = document.getElementById('strength-container');
+  const strengthBar = document.getElementById('strength-bar');
+  const strengthText = document.getElementById('strength-text');
+
+  // Password visibility toggle icons
+  const togglePassword = document.getElementById('toggle-password');
+  const toggleConfirmPassword = document.getElementById('toggle-confirm-password');
+
+  // ==========================================
+  // 3. UI HELPERS & STEP NAVIGATION
+  // ==========================================
+
+  function showError(input, errorElement, message) {
+    input.parentElement.classList.add('invalid');
+    errorElement.textContent = message;
+  }
+
+  function clearError(input, errorElement) {
+    input.parentElement.classList.remove('invalid');
+    if (errorElement) {
+      errorElement.textContent = '';
+    }
+  }
+
+  // Switch active wizard step
   function showStep(stepKey) {
-    // Hide all step sections
     Object.values(steps).forEach(s => {
       s.el.style.display = 'none';
       s.el.classList.remove('active');
     });
 
-    // Show selected step
     const target = steps[stepKey];
     if (target) {
       target.el.style.display = 'block';
       target.el.classList.add('active');
-      
-      // Dynamically update the card title & subtitle on the left side
+
       document.querySelector('.card-title').textContent = target.title;
       document.querySelector('.card-subtitle').textContent = target.subtitle;
     }
   }
 
-  // Password Visibility Toggle Logic Helper
+  // ==========================================
+  // 4. PASSWORD STRENGTH & VISIBILITY
+  // ==========================================
+
   function setupPasswordToggle(toggleIcon, inputField) {
     toggleIcon.addEventListener('click', () => {
       const type = inputField.getAttribute('type') === 'password' ? 'text' : 'password';
       inputField.setAttribute('type', type);
-      
-      // Toggle the icon image source
-      if (type === 'password') {
-        toggleIcon.src = 'images/eye-slash-regular-full.svg';
-        toggleIcon.alt = 'Show Password';
-      } else {
-        toggleIcon.src = 'images/eye-regular-full.svg';
-        toggleIcon.alt = 'Hide Password';
-      }
+      toggleIcon.src = type === 'password' ? 'images/eye-slash-regular-full.svg' : 'images/eye-regular-full.svg';
+      toggleIcon.alt = type === 'password' ? 'Show Password' : 'Hide Password';
     });
   }
 
-  // Wire up the toggles
   setupPasswordToggle(togglePassword, passwordInput);
   setupPasswordToggle(toggleConfirmPassword, confirmPasswordInput);
 
-  // Real-time Password Strength indicator
-  passwordInput.addEventListener('input', () => {
-    const val = passwordInput.value;
-    if (val === '') {
-      strengthContainer.style.display = 'none';
-      return;
-    }
-    strengthContainer.style.display = 'flex';
-
-    const strength = evaluatePassword(val);
-    updateStrengthUI(strength);
-  });
-
-  // Helper function to evaluate password strength
   function evaluatePassword(pwd) {
     if (pwd.length < 8) {
       return { score: 1, label: 'Poor (too short, min 8 characters)', color: 'var(--color-strength-poor)', width: '25%' };
@@ -124,26 +127,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const hasLower = /[a-z]/.test(pwd);
     const hasUpper = /[A-Z]/.test(pwd);
 
-    // If it's 8+ characters but contains only one class of characters
     if ((hasLetters && !hasNumbers && !hasSpecial) || (!hasLetters && hasNumbers && !hasSpecial)) {
       return { score: 2, label: 'Medium (mix letters and numbers for stronger security)', color: 'var(--color-strength-good)', width: '50%' };
     }
 
-    // Mix of letters and numbers
-    if (hasLetters && hasNumbers && !hasSpecial) {
-      return { score: 3, label: 'Good', color: 'var(--color-strength-good)', width: '75%' };
-    }
-
-    // Strong: mix of uppercase, lowercase, numbers, and special characters
     if (hasLower && hasUpper && hasNumbers && hasSpecial) {
       return { score: 4, label: 'Strong', color: 'var(--color-strength-strong)', width: '100%' };
     }
 
-    // Default catch-all for mixed classes
     return { score: 3, label: 'Good', color: 'var(--color-strength-good)', width: '75%' };
   }
 
-  // Update visual UI for password strength
   function updateStrengthUI(strength) {
     strengthBar.style.width = strength.width;
     strengthBar.style.backgroundColor = strength.color;
@@ -151,7 +145,21 @@ document.addEventListener('DOMContentLoaded', () => {
     strengthText.style.color = strength.color;
   }
 
-  // Validation functions for input fields
+  passwordInput.addEventListener('input', () => {
+    const val = passwordInput.value;
+    if (val === '') {
+      strengthContainer.style.display = 'none';
+      return;
+    }
+    strengthContainer.style.display = 'flex';
+    const strength = evaluatePassword(val);
+    updateStrengthUI(strength);
+  });
+
+  // ==========================================
+  // 5. FIELD VALIDATORS
+  // ==========================================
+
   function validateFirstName() {
     const val = firstNameInput.value.trim();
     if (val === '') {
@@ -168,7 +176,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const yearVal = dobYearInput.value.trim();
 
     let isValid = true;
-    
     const monthErr = document.getElementById('dob-month-error');
     const dayErr = document.getElementById('dob-day-error');
     const yearErr = document.getElementById('dob-year-error');
@@ -219,7 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return false;
     }
 
-    // Age validation: check internally if DOB is less than current date
+    // Age validation: check if DOB is in the future
     const currentDate = new Date();
     currentDate.setHours(0, 0, 0, 0);
     dateObj.setHours(0, 0, 0, 0);
@@ -248,7 +255,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       // Connect to Express Endpoint to verify username availability
-      const response = await fetch('http://localhost:5000/api/check-username', {
+      const response = await fetch(`${API_BASE}/check-username`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -269,7 +276,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (err) {
       console.warn('Backend username check offline, simulating verification:', err);
-      // Simulate check offline
       const dummyTakenUsernames = ['admin', 'taken', 'saniya.test', 'test'];
       if (dummyTakenUsernames.includes(val.toLowerCase())) {
         showError(usernameInput, usernameError, 'This Email ID is already taken');
@@ -315,20 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return true;
   }
 
-  // Helpers to add/remove classes and text
-  function showError(input, errorElement, message) {
-    input.parentElement.classList.add('invalid');
-    errorElement.textContent = message;
-  }
-
-  function clearError(input, errorElement) {
-    input.parentElement.classList.remove('invalid');
-    if (errorElement) {
-      errorElement.textContent = '';
-    }
-  }
-
-  // Input listeners for real-time validation clearing
+  // Real-time input listeners to clear errors on typing
   firstNameInput.addEventListener('input', validateFirstName);
   usernameInput.addEventListener('input', () => {
     if (usernameInput.value.trim() !== '') {
@@ -338,7 +331,6 @@ document.addEventListener('DOMContentLoaded', () => {
   passwordInput.addEventListener('input', validatePassword);
   confirmPasswordInput.addEventListener('input', validateConfirmPassword);
 
-  // Month change listener for floating label visual toggle
   dobMonthSelect.addEventListener('change', () => {
     if (dobMonthSelect.value !== '') {
       dobMonthSelect.classList.add('has-value');
@@ -362,14 +354,18 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('dob-general-error').textContent = '';
   });
 
-  // Step 1 Navigation
+  // ==========================================
+  // 6. STEP BUTTON NAVIGATION HANDLERS
+  // ==========================================
+
+  // Step 1: Name -> Step 2
   document.getElementById('btn-step-1-next').addEventListener('click', () => {
     if (validateFirstName()) {
       showStep(2);
     }
   });
 
-  // Step 2 Navigation
+  // Step 2: Birthday -> Step 1 / Step 3
   document.getElementById('btn-step-2-back').addEventListener('click', () => {
     showStep(1);
   });
@@ -380,12 +376,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Age Error Navigation
+  // Age Error Back Button
   document.getElementById('btn-age-error-back').addEventListener('click', () => {
     showStep(2);
   });
 
-  // Step 3 Navigation
+  // Step 3: Username -> Step 2 / Step 4
   document.getElementById('btn-step-3-back').addEventListener('click', () => {
     showStep(2);
   });
@@ -397,16 +393,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Step 4 Navigation
+  // Step 4: Password -> Step 3
   document.getElementById('btn-step-4-back').addEventListener('click', () => {
     showStep(3);
   });
 
-  // Form submission handler
+  // ==========================================
+  // 7. FINAL FORM SUBMIT & ACCOUNT CREATION
+  // ==========================================
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    // Trigger validations
     const isPassValid = validatePassword();
     const isConfValid = validateConfirmPassword();
 
@@ -414,7 +412,6 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Structure payload
     const payload = {
       firstName: firstNameInput.value.trim(),
       lastName: lastNameInput.value.trim(),
@@ -430,8 +427,7 @@ document.addEventListener('DOMContentLoaded', () => {
     submitBtn.disabled = true;
 
     try {
-      // Connect to the Express Backend API
-      const response = await fetch('http://localhost:5000/api/signup', {
+      const response = await fetch(`${API_BASE}/signup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -443,9 +439,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (response.ok) {
         alert(`Account created successfully!\nEmail: ${payload.email}\nYou can now sign in.`);
-        window.location.href = 'signin.html'; // Redirect to sign in page
+        window.location.href = 'signin.html';
       } else {
-        // If server returns an error (e.g. Email already exists)
         showError(usernameInput, usernameError, data.message || 'Signup failed. Please try again.');
         showStep(3);
         submitBtn.textContent = 'Create';
@@ -453,9 +448,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (err) {
       console.error('Error connecting to backend:', err);
-      // Fallback message for development simulation
       alert(`Database/Server Connection Offline!\n\nSimulated Account creation:\nName: ${payload.firstName}\nEmail: ${payload.email}\n\n(To save to MongoDB, start the Express backend in backend/ directory)`);
-      window.location.href = 'signin.html'; // Redirect to sign in page
+      window.location.href = 'signin.html';
     }
   });
+
 });

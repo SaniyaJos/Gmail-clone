@@ -1,7 +1,18 @@
+/**
+ * Email Controller - Handles all email CRUD operations, folder queries, search, and status toggles.
+ */
+
 const mongoose = require('mongoose');
 const Email = require('../models/Email');
 const User = require('../models/User');
 
+// ==========================================
+// 1. HELPER FUNCTIONS
+// ==========================================
+
+/**
+ * Enriches a list of email objects with the sender's display first name.
+ */
 async function addSenderNames(emails) {
   const senderEmails = [...new Set(emails.map(email => email.sender))];
   const senders = await User.find({ email: { $in: senderEmails } }, 'email firstName').lean();
@@ -13,6 +24,16 @@ async function addSenderNames(emails) {
   }));
 }
 
+// ==========================================
+// 2. EMAIL CREATION & SENDING
+// ==========================================
+
+/**
+ * POST /api/emails
+ * Sends an email or saves a draft.
+ * - For drafts or self-sent emails: saves a single copy owned by sender.
+ * - For normal emails: saves separate copies for sender (sent) and receiver (inbox).
+ */
 async function createEmail(req, res) {
   try {
     const { sender, receiver, subject, body, isDraft } = req.body;
@@ -22,52 +43,36 @@ async function createEmail(req, res) {
       return res.status(400).json({ message: 'Sender and Receiver are required' });
     }
 
+    const emailData = {
+      sender,
+      receiver: receiver || '',
+      subject: subject || '(No Subject)',
+      body: body || '',
+      isDraft: Boolean(isDraft)
+    };
+
     let savedEmail;
 
-    if (isDraft) {
-      savedEmail = new Email({
+    if (isDraft || sender.toLowerCase() === receiver.toLowerCase()) {
+      // Single copy for drafts or self-sent emails
+      savedEmail = await new Email({
+        ...emailData,
         owner: sender.toLowerCase(),
-        sender,
-        receiver: receiver || '',
-        subject: subject || '(No Subject)',
-        body: body || '',
-        isDraft: true
-      });
-      await savedEmail.save();
-    } else if (sender.toLowerCase() === receiver.toLowerCase()) {
-      savedEmail = new Email({
-        owner: sender.toLowerCase(),
-        sender,
-        receiver,
-        subject: subject || '(No Subject)',
-        body: body || '',
-        isDraft: false,
         isRead: false
-      });
-      await savedEmail.save();
+      }).save();
     } else {
-      const senderCopy = new Email({
+      // Two copies: one for sender's Sent box, one for recipient's Inbox
+      savedEmail = await new Email({
+        ...emailData,
         owner: sender.toLowerCase(),
-        sender,
-        receiver,
-        subject: subject || '(No Subject)',
-        body: body || '',
-        isDraft: false,
         isRead: true
-      });
-      await senderCopy.save();
-      savedEmail = senderCopy;
+      }).save();
 
-      const receiverCopy = new Email({
+      await new Email({
+        ...emailData,
         owner: receiver.toLowerCase(),
-        sender,
-        receiver,
-        subject: subject || '(No Subject)',
-        body: body || '',
-        isDraft: false,
         isRead: false
-      });
-      await receiverCopy.save();
+      }).save();
     }
 
     return res.status(201).json({
@@ -80,6 +85,13 @@ async function createEmail(req, res) {
   }
 }
 
+// ==========================================
+// 3. SEARCH & RETRIEVAL
+// ==========================================
+
+/**
+ * Builds a MongoDB filter query for email search terms (e.g. from:, to:, subject:, -term).
+ */
 function buildEmailSearchFilter(queryEmail, folder, searchQuery) {
   const conditions = [{ isTrash: folder === 'bin' }];
 
@@ -199,6 +211,13 @@ async function getStarredEmails(req, res) {
   }
 }
 
+// ==========================================
+// 4. STARRED STATUS MANAGEMENT
+// ==========================================
+
+/**
+ * Updates the isStarred flag for an email by its ID.
+ */
 async function updateStarredStatus(req, res, isStarred) {
   const { id } = req.params;
 
@@ -262,6 +281,14 @@ async function toggleStarredEmail(req, res) {
   }
 }
 
+// ==========================================
+// 5. GENERAL STATUS UPDATES (READ, TRASH, ETC.)
+// ==========================================
+
+/**
+ * PATCH /api/emails/:id
+ * Updates boolean status flags (isStarred, isRead, isTrash, isDraft).
+ */
 async function updateEmail(req, res) {
   const { id } = req.params;
 
@@ -295,6 +322,14 @@ async function updateEmail(req, res) {
   }
 }
 
+// ==========================================
+// 6. DRAFT UPDATES
+// ==========================================
+
+/**
+ * PATCH /api/emails/:id/draft
+ * Updates an existing draft's recipient, subject, body, and timestamp.
+ */
 async function updateDraft(req, res) {
   const { id } = req.params;
 
@@ -328,6 +363,14 @@ async function updateDraft(req, res) {
   }
 }
 
+// ==========================================
+// 7. PERMANENT DELETION
+// ==========================================
+
+/**
+ * DELETE /api/emails/:id
+ * Permanently deletes an email document from the database (hard delete).
+ */
 async function deleteEmail(req, res) {
   const { id } = req.params;
 
