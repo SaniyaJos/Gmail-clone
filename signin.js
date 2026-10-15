@@ -80,10 +80,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!isValid) return;
 
-    // Normalize email: If user enters just "saniya.test", append "@gmail.com"
+    // Normalize email: If user enters just "saniya.test", append "@flow.com"
     let formattedEmail = emailVal.toLowerCase();
     if (!formattedEmail.includes('@')) {
-      formattedEmail = `${formattedEmail}@gmail.com`;
+      formattedEmail = `${formattedEmail}@flow.com`;
     }
 
     submitBtn.textContent = 'Verifying...';

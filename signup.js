@@ -260,7 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ email: `${val.toLowerCase()}@gmail.com` })
+        body: JSON.stringify({ email: `${val.toLowerCase()}@flow.com` })
       });
 
       if (!response.ok) {
@@ -415,7 +415,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const payload = {
       firstName: firstNameInput.value.trim(),
       lastName: lastNameInput.value.trim(),
-      email: `${usernameInput.value.trim().toLowerCase()}@gmail.com`,
+      email: `${usernameInput.value.trim().toLowerCase()}@flow.com`,
       password: passwordInput.value,
       dobDay: parseInt(dobDayInput.value.trim(), 10),
       dobMonth: parseInt(dobMonthSelect.value, 10),

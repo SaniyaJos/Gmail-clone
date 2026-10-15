@@ -619,12 +619,11 @@ document.addEventListener('DOMContentLoaded', () => {
   emailToInput.addEventListener('keydown', async (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      const email = emailToInput.value.trim().toLowerCase();
+      let email = emailToInput.value.trim().toLowerCase();
       if (!email) return;
 
       if (!email.includes('@')) {
-        alert('Please enter a valid email address.');
-        return;
+        email = `${email}@flow.com`;
       }
 
       try {
@@ -657,13 +656,12 @@ document.addEventListener('DOMContentLoaded', () => {
   composeForm.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    const toVal = emailToInput.value.trim().toLowerCase();
+    let toVal = emailToInput.value.trim().toLowerCase();
 
     // If typed without pressing enter, verify now
     if (toVal) {
       if (!toVal.includes('@')) {
-        alert('Please enter a valid receiver email address.');
-        return;
+        toVal = `${toVal}@flow.com`;
       }
 
       try {
