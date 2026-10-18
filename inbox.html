@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>InboxFlow - Inbox</title>
-  <link rel="stylesheet" href="inbox.css">
+  <link rel="stylesheet" href="inbox.css?v=6">
   <!-- Google Fonts: Roboto and Outfit -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -98,6 +98,14 @@
             <span class="nav-label">Drafts</span>
             <span class="nav-badge" id="badge-drafts"></span>
           </a>
+          <a href="#" class="nav-item" id="nav-actions" data-folder="actions">
+            <svg class="sidebar-icon action-engine-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 11l3 3L22 4"/>
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+            </svg>
+            <span class="nav-label">My Actions</span>
+            <span class="nav-badge actions-badge" id="badge-actions"></span>
+          </a>
           <a href="#" class="nav-item" id="nav-bin" data-folder="bin">
             <img src="images/trash-can-regular-full.svg" alt="Bin" class="sidebar-icon">
             <span class="nav-label">Bin</span>
@@ -146,6 +154,58 @@
               <!-- Dynamically populated rows -->
             </ul>
           </div>
+
+          <!-- My Actions Workspace View (Email-to-Action Engine) -->
+          <div class="actions-panel-view" id="actions-panel-view" style="display: none;">
+            <div class="actions-panel-header">
+              <div class="actions-header-info">
+                <div class="actions-title-row">
+                  <h2 class="actions-panel-title">My Actions</h2>
+                  <span class="actions-ai-tag">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+                      <path d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25L19 9zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12l-5.5-2.5zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25L19 15z"/>
+                    </svg>
+                    AI Engine
+                  </span>
+                </div>
+                <span class="actions-panel-subtitle">Actionable tasks extracted from your emails</span>
+              </div>
+              <div class="actions-header-controls">
+                <div class="actions-filter-tabs">
+                  <button type="button" class="action-tab-btn active" data-filter="all">All</button>
+                  <button type="button" class="action-tab-btn" data-filter="Pending">Pending</button>
+                  <button type="button" class="action-tab-btn" data-filter="Completed">Completed</button>
+                </div>
+                <select class="action-priority-select" id="action-priority-filter" aria-label="Filter by priority">
+                  <option value="">All Priorities</option>
+                  <option value="High">High Priority</option>
+                  <option value="Medium">Medium Priority</option>
+                  <option value="Low">Low Priority</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Notification banner for extraction feedback -->
+            <div class="actions-banner" id="actions-banner" style="display: none;"></div>
+
+            <!-- Loading indicator -->
+            <div class="actions-loading-state" id="actions-loading" style="display: none;">
+              <div class="action-spinner"></div>
+              <span>Loading tasks...</span>
+            </div>
+
+            <!-- Tasks list container -->
+            <div class="actions-tasks-container" id="actions-tasks-container">
+              <!-- Dynamically populated task cards -->
+            </div>
+
+            <!-- Empty state for actions -->
+            <div class="actions-empty-state" id="actions-empty-state" style="display: none;">
+              <div class="actions-empty-icon">✓</div>
+              <div class="actions-empty-title">All tasks completed!</div>
+              <div class="actions-empty-subtitle">Open any email and click "Extract Actions" to automatically detect tasks, deadlines, and priorities.</div>
+            </div>
+          </div>
         </div>
 
         <!-- Email Detailed View Overlay Modal -->
@@ -155,6 +215,15 @@
               <span style="font-size: 20px; line-height: 1;">&larr;</span>
             </button>
             <div class="details-actions">
+              <!-- Extract Actions Gemini AI Button -->
+              <button class="btn-action-extract" id="btn-extract-actions" type="button" title="Extract actionable tasks using AI">
+                <svg class="gemini-sparkle-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                  <path d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25L19 9zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12l-5.5-2.5zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25L19 15z"/>
+                </svg>
+                <span class="btn-extract-text" id="btn-extract-text">Extract Actions</span>
+                <span class="extract-spinner" id="btn-extract-spinner" style="display: none;"></span>
+              </button>
+
               <button class="action-icon-btn" id="details-action-restore" title="Restore" style="display: none;">
                 <span class="restore-icon" aria-hidden="true">&#8630;</span>
               </button>
@@ -184,6 +253,22 @@
               <span class="details-time" id="details-timestamp"></span>
             </div>
             <div class="details-content" id="details-content"></div>
+
+            <!-- Inline Extracted Actions Section in Email View -->
+            <div class="email-tasks-section" id="email-tasks-section" style="display: none;">
+              <div class="tasks-section-header">
+                <div class="tasks-section-title">
+                  <span class="tasks-section-badge">Action Items</span>
+                  <span class="tasks-section-count" id="email-tasks-count">0 items</span>
+                </div>
+                <button type="button" class="btn-re-extract" id="btn-re-extract" title="Re-run AI extraction">
+                  ↻ Re-analyze
+                </button>
+              </div>
+              <div class="email-tasks-list" id="email-tasks-list">
+                <!-- Inline task cards -->
+              </div>
+            </div>
           </div>
         </div>
       </main>
@@ -214,7 +299,7 @@
         </div>
         <div class="modal-footer">
           <div class="footer-left">
-            <button type="submit" class="btn-send">Send</button>
+            <button type="button" class="btn-send" id="btn-send-email">Send</button>
           </div>
           <div class="footer-right">
             <button type="button" class="btn-discard" id="btn-compose-discard" title="Discard">
@@ -225,8 +310,20 @@
       </form>
     </div>
 
+    <!-- Confirm Send Without Subject Modal Popup -->
+    <div class="confirm-dialog-overlay" id="confirm-subject-dialog" style="display: none;">
+      <div class="confirm-dialog-card">
+        <div class="confirm-dialog-title">Send without subject?</div>
+        <div class="confirm-dialog-body">Are you sure you want to send this message without a subject?</div>
+        <div class="confirm-dialog-actions">
+          <button type="button" class="btn-dialog-cancel" id="btn-cancel-no-subject">Cancel</button>
+          <button type="button" class="btn-dialog-confirm" id="btn-confirm-no-subject">Send</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 
-  <script src="inbox.js"></script>
+  <script src="inbox.js?v=6"></script>
 </body>
 </html>

@@ -130,12 +130,53 @@ document.addEventListener('DOMContentLoaded', () => {
   const detailsTimestamp = document.getElementById('details-timestamp');
   const detailsContent = document.getElementById('details-content');
 
+  // Email-to-Action Engine DOM Elements
+  const btnExtractActions = document.getElementById('btn-extract-actions');
+  const btnExtractText = document.getElementById('btn-extract-text');
+  const btnExtractSpinner = document.getElementById('btn-extract-spinner');
+  const emailTasksSection = document.getElementById('email-tasks-section');
+  const emailTasksCount = document.getElementById('email-tasks-count');
+  const btnReExtract = document.getElementById('btn-re-extract');
+  const emailTasksList = document.getElementById('email-tasks-list');
+
+  const actionsPanelView = document.getElementById('actions-panel-view');
+  const actionsTasksContainer = document.getElementById('actions-tasks-container');
+  const actionsEmptyState = document.getElementById('actions-empty-state');
+  const actionsLoadingState = document.getElementById('actions-loading');
+  const actionsBanner = document.getElementById('actions-banner');
+  const actionPriorityFilter = document.getElementById('action-priority-filter');
+  const actionTabButtons = document.querySelectorAll('.action-tab-btn');
+  const badgeActions = document.getElementById('badge-actions');
+
+  let activeTaskFilter = 'all';
+  let activePriorityFilter = '';
+  let actionsTasksCache = [];
+  let emailTasksCache = [];
+
   // ==========================================
   // 4. API SERVICE HELPERS
   // ==========================================
 
   // Fetch emails from server based on folder and search query
   async function fetchEmails(folder) {
+    // If My Actions folder selected, show dedicated Action Engine dashboard
+    if (folder === 'actions') {
+      mailListWrapper.style.display = 'none';
+      emptyStateView.style.display = 'none';
+      actionsPanelView.style.display = 'flex';
+      mailCountRange.textContent = 'Tasks';
+      selectAllCheckbox.disabled = true;
+      deleteActionBarBtn.disabled = true;
+      restoreActionBarBtn.style.display = 'none';
+      fetchUserTasks();
+      refreshActionsBadge();
+      return;
+    }
+
+    // Normal email folder handling
+    actionsPanelView.style.display = 'none';
+    selectAllCheckbox.disabled = false;
+
     const requestSequence = ++emailFetchSequence;
     try {
       const params = new URLSearchParams({ email: userEmail, folder });
@@ -149,6 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
       emailListCache = data;
       renderEmailList(data);
       if (folder !== 'drafts') refreshDraftBadge();
+      refreshActionsBadge();
     } catch (err) {
       console.error('Error fetching emails:', err);
     }
@@ -349,6 +391,18 @@ document.addEventListener('DOMContentLoaded', () => {
     detailsActionDelete.title = activeFolder === 'bin' ? 'Permanently delete' : 'Move to Bin';
     detailsStarButton.style.display = activeFolder === 'bin' ? 'none' : 'inline-flex';
 
+    // Configure Extract Actions button state
+    if (btnExtractActions) {
+      btnExtractActions.style.display = (activeFolder === 'bin' || email.isDraft) ? 'none' : 'inline-flex';
+      btnExtractActions.disabled = false;
+      btnExtractSpinner.style.display = 'none';
+      btnExtractText.textContent = 'Extract Actions';
+    }
+    if (emailTasksSection) {
+      emailTasksSection.style.display = 'none';
+      emailTasksList.innerHTML = '';
+    }
+
     detailsSubject.textContent = email.subject;
     setDetailsStarState(email.isStarred);
     const senderName = email.firstName || email.sender.split('@')[0];
@@ -363,6 +417,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!email.isRead) {
       await updateEmailStatus(email._id, { isRead: true });
     }
+
+    // Load any existing extracted tasks for this email
+    if (email._id && !email.isDraft && activeFolder !== 'bin') {
+      fetchEmailTasks(email._id);
+    }
   }
 
   function setDetailsStarState(isStarred) {
@@ -375,6 +434,467 @@ document.addEventListener('DOMContentLoaded', () => {
   function closeDetailsModal() {
     emailDetailsModal.style.display = 'none';
     currentOpenEmail = null;
+    if (emailTasksSection) {
+      emailTasksSection.style.display = 'none';
+      emailTasksList.innerHTML = '';
+    }
+    if (btnExtractActions) {
+      btnExtractActions.disabled = false;
+      btnExtractSpinner.style.display = 'none';
+      btnExtractText.textContent = 'Extract Actions';
+    }
+  }
+
+  // ==========================================
+  // 6.5. EMAIL-TO-ACTION ENGINE LOGIC
+  // ==========================================
+
+  // Format deadline for task cards
+  function formatTaskDeadline(deadlineStr) {
+    if (!deadlineStr) return null;
+    const deadline = new Date(deadlineStr);
+    if (isNaN(deadline.getTime())) return null;
+
+    const now = new Date();
+    const isOverdue = deadline < now;
+
+    const dateOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+    const timeOptions = { hour: 'numeric', minute: '2-digit' };
+    
+    // Check if time is specified (not default midnight 00:00:00 UTC)
+    const hasTime = deadline.getUTCHours() !== 0 || deadline.getUTCMinutes() !== 0;
+    const dateFormatted = deadline.toLocaleDateString('en-US', dateOptions);
+    const timeFormatted = hasTime ? `, ${deadline.toLocaleTimeString([], timeOptions)}` : '';
+
+    return {
+      text: `${dateFormatted}${timeFormatted}`,
+      isOverdue
+    };
+  }
+
+  // Show temporary feedback banner in actions panel
+  function showActionBanner(type, message) {
+    if (!actionsBanner) return;
+    actionsBanner.className = `actions-banner ${type}`;
+    actionsBanner.textContent = message;
+    actionsBanner.style.display = 'flex';
+    setTimeout(() => {
+      actionsBanner.style.display = 'none';
+    }, 4500);
+  }
+
+  // Update sidebar My Actions badge with count of Pending tasks
+  async function refreshActionsBadge() {
+    try {
+      const response = await fetch(`${API_BASE}/tasks?userEmail=${encodeURIComponent(userEmail)}&status=Pending`, {
+        headers: { 'x-user-email': userEmail }
+      });
+      if (!response.ok) return;
+      const tasks = await response.json();
+      if (badgeActions) {
+        badgeActions.textContent = tasks.length > 0 ? tasks.length : '';
+      }
+    } catch (err) {
+      console.error('Error refreshing actions badge:', err);
+    }
+  }
+
+  // Fetch tasks associated with a specific email (for inline details view)
+  async function fetchEmailTasks(emailId) {
+    try {
+      const response = await fetch(`${API_BASE}/tasks?userEmail=${encodeURIComponent(userEmail)}&emailId=${emailId}`, {
+        headers: { 'x-user-email': userEmail }
+      });
+      if (!response.ok) return;
+      const tasks = await response.json();
+      emailTasksCache = tasks;
+
+      if (tasks.length > 0) {
+        emailTasksSection.style.display = 'block';
+        emailTasksCount.textContent = `${tasks.length} item${tasks.length !== 1 ? 's' : ''}`;
+        btnExtractText.textContent = 'Re-extract Actions';
+        renderTaskCards(tasks, emailTasksList, true);
+      } else {
+        emailTasksSection.style.display = 'none';
+        btnExtractText.textContent = 'Extract Actions';
+      }
+    } catch (err) {
+      console.error('Error fetching email tasks:', err);
+    }
+  }
+
+  // Extract Actions using Gemini AI
+  async function extractActionsForCurrentEmail(forceRefresh = false) {
+    if (!currentOpenEmail) return;
+
+    btnExtractActions.disabled = true;
+    btnExtractSpinner.style.display = 'inline-block';
+    btnExtractText.textContent = forceRefresh ? 'Re-analyzing...' : 'Extracting...';
+
+    try {
+      const response = await fetch(`${API_BASE}/tasks/extract`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-email': userEmail
+        },
+        body: JSON.stringify({
+          emailId: currentOpenEmail._id,
+          userEmail,
+          forceRefresh
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to extract tasks with AI');
+      }
+
+      const tasks = data.tasks || [];
+      emailTasksCache = tasks;
+
+      if (tasks.length > 0) {
+        emailTasksSection.style.display = 'block';
+        emailTasksCount.textContent = `${tasks.length} item${tasks.length !== 1 ? 's' : ''}`;
+        renderTaskCards(tasks, emailTasksList, true);
+        btnExtractText.textContent = 'Re-extract Actions';
+      } else {
+        emailTasksSection.style.display = 'none';
+        btnExtractText.textContent = 'Extract Actions';
+        alert(data.message || 'No actionable tasks found in this email.');
+      }
+
+      refreshActionsBadge();
+
+    } catch (err) {
+      console.error('Error extracting actions:', err);
+      alert(`Action Extraction Error: ${err.message}`);
+    } finally {
+      btnExtractActions.disabled = false;
+      btnExtractSpinner.style.display = 'none';
+    }
+  }
+
+  // Fetch all tasks for the authenticated user for the My Actions dashboard
+  async function fetchUserTasks() {
+    if (!actionsTasksContainer) return;
+    
+    actionsLoadingState.style.display = 'flex';
+    actionsEmptyState.style.display = 'none';
+    actionsTasksContainer.innerHTML = '';
+
+    try {
+      const params = new URLSearchParams({ userEmail });
+      if (activeTaskFilter !== 'all') {
+        params.set('status', activeTaskFilter);
+      }
+      if (activePriorityFilter) {
+        params.set('priority', activePriorityFilter);
+      }
+
+      const response = await fetch(`${API_BASE}/tasks?${params}`, {
+        headers: { 'x-user-email': userEmail }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to retrieve tasks');
+      }
+
+      const tasks = await response.json();
+      actionsTasksCache = tasks;
+      actionsLoadingState.style.display = 'none';
+
+      if (tasks.length === 0) {
+        actionsEmptyState.style.display = 'flex';
+        const title = actionsEmptyState.querySelector('.actions-empty-title');
+        const subtitle = actionsEmptyState.querySelector('.actions-empty-subtitle');
+        if (activeTaskFilter === 'Completed') {
+          title.textContent = 'No completed tasks yet';
+          subtitle.textContent = 'Complete your pending action items to see them recorded here.';
+        } else if (activeTaskFilter === 'Pending') {
+          title.textContent = 'No pending tasks!';
+          subtitle.textContent = 'Great job! You have cleared all actionable tasks from your emails.';
+        } else {
+          title.textContent = 'No actionable tasks found';
+          subtitle.textContent = 'Open any email and click "Extract Actions" to automatically detect tasks, deadlines, and priorities.';
+        }
+      } else {
+        renderTaskCards(tasks, actionsTasksContainer, false);
+      }
+
+      refreshActionsBadge();
+
+    } catch (err) {
+      console.error('Error fetching user tasks:', err);
+      actionsLoadingState.style.display = 'none';
+      showActionBanner('error', `Failed to load actions: ${err.message}`);
+    }
+  }
+
+  // Render task cards into target container (dashboard or inline email details)
+  function renderTaskCards(tasks, container, isInline = false) {
+    container.innerHTML = '';
+
+    tasks.forEach(task => {
+      const card = document.createElement('div');
+      card.className = `task-card ${task.status === 'Completed' ? 'completed' : ''}`;
+      card.dataset.taskId = task._id;
+
+      // Priority chip
+      const priorityClass = `priority-${task.priority.toLowerCase()}`;
+      const priorityLabel = `${task.priority} Priority`;
+
+      // Status chip
+      const statusClass = task.status.toLowerCase();
+
+      // Deadline chip
+      const deadlineInfo = formatTaskDeadline(task.deadline);
+      let deadlineHtml = '';
+      if (deadlineInfo) {
+        const passedClass = deadlineInfo.isOverdue && task.status !== 'Completed' ? 'passed' : '';
+        const icon = deadlineInfo.isOverdue && task.status !== 'Completed' ? '⚠️' : '📅';
+        deadlineHtml = `<span class="deadline-chip ${passedClass}">${icon} ${deadlineInfo.text}</span>`;
+      } else {
+        deadlineHtml = `<span class="deadline-chip no-deadline">No deadline</span>`;
+      }
+
+      // Reason block
+      const reasonHtml = task.reason ? `<div class="task-reason">💡 ${escapeHtml(task.reason)}</div>` : '';
+
+      // Original Email Reference (Show First Name + Last Name of the other party)
+      let emailRefHtml = '';
+      const emailObj = task.emailId;
+      if (!isInline && emailObj && typeof emailObj === 'object') {
+        const emailSubject = escapeHtml(emailObj.subject || '(No Subject)');
+        const rawSender = (emailObj.sender || '').toLowerCase();
+        const rawReceiver = (emailObj.receiver || '').toLowerCase();
+        const currentEmail = userEmail.toLowerCase();
+
+        const senderDisplay = escapeHtml(emailObj.senderName || rawSender.split('@')[0] || 'Unknown');
+        const receiverDisplay = escapeHtml(emailObj.receiverName || rawReceiver.split('@')[0] || 'Unknown');
+
+        let displayTarget = '';
+        if (currentEmail === rawSender) {
+          // Logged in user is the sender: show who it was sent to (First + Last Name)
+          displayTarget = `To: ${receiverDisplay}`;
+        } else {
+          // Logged in user is the recipient: show who it was received from (First + Last Name)
+          displayTarget = `From: ${senderDisplay}`;
+        }
+
+        emailRefHtml = `
+          <a class="task-email-ref" title="View email (${displayTarget}): ${emailSubject}" data-email-id="${emailObj._id}">
+            ✉ ${displayTarget} • ${emailSubject}
+          </a>
+        `;
+      }
+
+      card.innerHTML = `
+        <div class="task-checkbox-container">
+          <input type="checkbox" class="task-checkbox" ${task.status === 'Completed' ? 'checked' : ''} aria-label="Toggle complete task">
+        </div>
+        <div class="task-details">
+          <div class="task-header-line">
+            <span class="task-title">${escapeHtml(task.title)}</span>
+            <div class="task-badges">
+              <span class="priority-chip ${priorityClass}">${priorityLabel}</span>
+              <span class="status-chip ${statusClass}">${task.status}</span>
+            </div>
+          </div>
+          ${task.description ? `<div class="task-description">${escapeHtml(task.description)}</div>` : ''}
+          ${reasonHtml}
+          <div class="task-meta-footer">
+            <div class="task-meta-left">
+              ${deadlineHtml}
+              ${emailRefHtml}
+            </div>
+            <div class="task-actions">
+              <button type="button" class="btn-task-delete" title="Delete task" aria-label="Delete task">✕</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Toggle Task Completion Event
+      const checkbox = card.querySelector('.task-checkbox');
+      checkbox.addEventListener('change', async (e) => {
+        e.stopPropagation();
+        const nextStatus = checkbox.checked ? 'Completed' : 'Pending';
+        await toggleTaskCompletion(task._id, nextStatus, card, isInline);
+      });
+
+      // Delete Task Event
+      const deleteBtn = card.querySelector('.btn-task-delete');
+      deleteBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (confirm('Delete this task?')) {
+          await deleteTaskItem(task._id, card, isInline);
+        }
+      });
+
+      // Email Reference Link Click Event
+      const emailRefLink = card.querySelector('.task-email-ref');
+      if (emailRefLink) {
+        emailRefLink.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const targetEmailId = emailRefLink.getAttribute('data-email-id');
+          await openEmailDetailsById(targetEmailId);
+        });
+      }
+
+      container.appendChild(card);
+    });
+  }
+
+  // Toggle Task Completion Status
+  async function toggleTaskCompletion(taskId, nextStatus, cardElement, isInline) {
+    try {
+      // Optimistic UI update
+      if (nextStatus === 'Completed') {
+        cardElement.classList.add('completed');
+      } else {
+        cardElement.classList.remove('completed');
+      }
+      const statusChip = cardElement.querySelector('.status-chip');
+      if (statusChip) {
+        statusChip.textContent = nextStatus;
+        statusChip.className = `status-chip ${nextStatus.toLowerCase()}`;
+      }
+
+      const response = await fetch(`${API_BASE}/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-email': userEmail
+        },
+        body: JSON.stringify({ status: nextStatus })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update task status');
+      }
+
+      refreshActionsBadge();
+
+      // If active filter in dashboard is filtered, refresh list
+      if (!isInline && activeTaskFilter !== 'all') {
+        fetchUserTasks();
+      }
+    } catch (err) {
+      console.error('Error toggling task status:', err);
+      // Revert optimistic update
+      const checkbox = cardElement.querySelector('.task-checkbox');
+      if (checkbox) checkbox.checked = !checkbox.checked;
+      cardElement.classList.toggle('completed');
+      alert(`Could not update task: ${err.message}`);
+    }
+  }
+
+  // Delete Task Item
+  async function deleteTaskItem(taskId, cardElement, isInline) {
+    try {
+      cardElement.style.opacity = '0.3';
+      const response = await fetch(`${API_BASE}/tasks/${taskId}`, {
+        method: 'DELETE',
+        headers: { 'x-user-email': userEmail }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete task');
+      }
+
+      cardElement.remove();
+      refreshActionsBadge();
+
+      if (isInline) {
+        const remaining = emailTasksList.querySelectorAll('.task-card').length;
+        emailTasksCount.textContent = `${remaining} item${remaining !== 1 ? 's' : ''}`;
+        if (remaining === 0) {
+          emailTasksSection.style.display = 'none';
+          btnExtractText.textContent = 'Extract Actions';
+        }
+      } else {
+        const remaining = actionsTasksContainer.querySelectorAll('.task-card').length;
+        if (remaining === 0) {
+          actionsEmptyState.style.display = 'flex';
+        }
+      }
+    } catch (err) {
+      console.error('Error deleting task:', err);
+      cardElement.style.opacity = '1';
+      alert(`Could not delete task: ${err.message}`);
+    }
+  }
+
+  // Open an email by ID (used by task cards to navigate directly to the original email)
+  async function openEmailDetailsById(emailId) {
+    try {
+      // First check cache
+      let foundEmail = emailListCache.find(e => e._id === emailId);
+      if (!foundEmail) {
+        const response = await fetch(`${API_BASE}/emails?email=${encodeURIComponent(userEmail)}&folder=all`);
+        if (response.ok) {
+          const allEmails = await response.json();
+          foundEmail = allEmails.find(e => e._id === emailId);
+        }
+      }
+
+      if (foundEmail) {
+        openEmailDetails(foundEmail);
+      } else {
+        alert('The original email could not be found or may have been deleted.');
+      }
+    } catch (err) {
+      console.error('Error opening source email:', err);
+      alert('Error opening original email.');
+    }
+  }
+
+  // Simple HTML escaping helper for safe text rendering
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  // Extract Actions button event
+  if (btnExtractActions) {
+    btnExtractActions.addEventListener('click', (e) => {
+      e.stopPropagation();
+      extractActionsForCurrentEmail(false);
+    });
+  }
+
+  // Re-extract button event
+  if (btnReExtract) {
+    btnReExtract.addEventListener('click', (e) => {
+      e.stopPropagation();
+      extractActionsForCurrentEmail(true);
+    });
+  }
+
+  // Action Dashboard Filter Tabs
+  actionTabButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      actionTabButtons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeTaskFilter = btn.dataset.filter;
+      fetchUserTasks();
+    });
+  });
+
+  // Action Dashboard Priority Filter
+  if (actionPriorityFilter) {
+    actionPriorityFilter.addEventListener('change', () => {
+      activePriorityFilter = actionPriorityFilter.value;
+      fetchUserTasks();
+    });
   }
 
   // Details Modal: Back button
@@ -652,13 +1172,123 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Submit Compose Form (Send Email)
-  composeForm.addEventListener('submit', async (e) => {
+  // Disable native HTML form submission on composeForm completely under all circumstances
+  composeForm.addEventListener('submit', (e) => {
     e.preventDefault();
+    e.stopPropagation();
+    return false;
+  });
 
+  // Prevent Enter key in subject field from sending or submitting; instead move focus to email body
+  emailSubjectInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.keyCode === 13) {
+      e.preventDefault();
+      e.stopPropagation();
+      emailBodyInput.focus();
+      return false;
+    }
+  });
+
+  emailSubjectInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' || e.keyCode === 13) {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    }
+  });
+
+  // Blanket safeguard: Prevent Enter key anywhere in composeForm from submitting or sending email
+  composeForm.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.keyCode === 13) {
+      if (e.target === emailSubjectInput) {
+        e.preventDefault();
+        e.stopPropagation();
+        emailBodyInput.focus();
+        return false;
+      }
+      // Allow newline in body textarea
+      if (e.target === emailBodyInput) {
+        return;
+      }
+      // Allow Enter in emailToInput for adding recipient chips
+      if (e.target === emailToInput) {
+        return;
+      }
+      // Block Enter elsewhere
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    }
+  });
+
+  // Confirm Send Without Subject Dialog Elements & Handlers
+  const confirmSubjectDialog = document.getElementById('confirm-subject-dialog');
+  const btnCancelNoSubject = document.getElementById('btn-cancel-no-subject');
+  const btnConfirmNoSubject = document.getElementById('btn-confirm-no-subject');
+  let pendingSendAction = null;
+
+  function showSendWithoutSubjectDialog(sendAction) {
+    pendingSendAction = sendAction;
+    if (confirmSubjectDialog) {
+      confirmSubjectDialog.style.display = 'flex';
+    } else {
+      // Fallback confirmation dialog in case element is somehow missing in DOM
+      const confirmed = window.confirm('Send without subject?\n\nAre you sure you want to send this message without a subject?');
+      if (confirmed && typeof sendAction === 'function') {
+        sendAction();
+      }
+    }
+  }
+
+  function closeSendWithoutSubjectDialog() {
+    if (confirmSubjectDialog) {
+      confirmSubjectDialog.style.display = 'none';
+    }
+    pendingSendAction = null;
+  }
+
+  if (btnCancelNoSubject) {
+    btnCancelNoSubject.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeSendWithoutSubjectDialog();
+      emailSubjectInput.focus();
+    });
+  }
+
+  if (btnConfirmNoSubject) {
+    btnConfirmNoSubject.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const action = pendingSendAction;
+      closeSendWithoutSubjectDialog();
+      if (typeof action === 'function') {
+        await action();
+      }
+    });
+  }
+
+  if (confirmSubjectDialog) {
+    confirmSubjectDialog.addEventListener('click', (e) => {
+      if (e.target === confirmSubjectDialog) {
+        closeSendWithoutSubjectDialog();
+        emailSubjectInput.focus();
+      }
+    });
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && confirmSubjectDialog && confirmSubjectDialog.style.display === 'flex') {
+      closeSendWithoutSubjectDialog();
+      emailSubjectInput.focus();
+    }
+  });
+
+  // Dedicated Send Email Handler - Can ONLY be triggered by clicking the Send button
+  async function handleSendEmail() {
     let toVal = emailToInput.value.trim().toLowerCase();
 
-    // If typed without pressing enter, verify now
+    // If typed recipient without pressing enter, verify and convert to chip now
     if (toVal) {
       if (!toVal.includes('@')) {
         toVal = `${toVal}@flow.com`;
@@ -676,6 +1306,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const data = await response.json();
           if (data.exists) {
             addRecipientChip(toVal);
+            emailToInput.value = '';
           } else {
             alert('User Not Found');
             return;
@@ -685,7 +1316,7 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
       } catch (err) {
-        console.error('Check email availability failed on submit:', err);
+        console.error('Check email availability failed on send:', err);
       }
     }
 
@@ -700,43 +1331,65 @@ document.addEventListener('DOMContentLoaded', () => {
     const subject = emailSubjectInput.value.trim();
     const body = emailBodyInput.value;
 
-    let anySuccess = false;
-    for (const receiver of recipientEmails) {
-      try {
-        const response = await fetch(`${API_BASE}/emails`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            sender: userEmail,
-            receiver,
-            subject,
-            body
-          })
-        });
+    async function executeSend(finalSubject) {
+      let anySuccess = false;
+      for (const receiver of recipientEmails) {
+        try {
+          const response = await fetch(`${API_BASE}/emails`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              sender: userEmail,
+              receiver,
+              subject: finalSubject || '(No Subject)',
+              body
+            })
+          });
 
-        if (response.ok) {
-          anySuccess = true;
+          if (response.ok) {
+            anySuccess = true;
+          }
+        } catch (err) {
+          console.error(`Send email to ${receiver} connection failed:`, err);
         }
-      } catch (err) {
-        console.error(`Send email to ${receiver} connection failed:`, err);
+      }
+
+      if (anySuccess) {
+        // If this message started as a draft, remove the draft now that it was sent
+        if (currentDraftId) {
+          await deleteEmailPermanently(currentDraftId);
+        }
+        alert('Email sent successfully!');
+        closeComposeModal();
+        fetchEmails(activeFolder);
+      } else {
+        alert(`Connection Offline!\n\nEmail sent (Simulated):\nTo: ${recipientEmails.join(', ')}\nSubject: ${finalSubject}`);
+        closeComposeModal();
       }
     }
 
-    if (anySuccess) {
-      // If this message started as a draft, remove the draft now that it was sent
-      if (currentDraftId) {
-        await deleteEmailPermanently(currentDraftId);
-      }
-      alert('Email sent successfully!');
-      closeComposeModal();
-      fetchEmails(activeFolder);
-    } else {
-      alert(`Connection Offline!\n\nEmail sent (Simulated):\nTo: ${recipientEmails.join(', ')}\nSubject: ${subject}`);
-      closeComposeModal();
+    // If subject is not given in any type of situation (with or without body), show popup to confirm
+    if (!subject) {
+      showSendWithoutSubjectDialog(async () => {
+        await executeSend('');
+      });
+      return;
     }
-  });
+
+    await executeSend(subject);
+  }
+
+  // Bind email sending ONLY to the Send button click
+  const sendEmailButton = document.getElementById('btn-send-email') || composeForm.querySelector('.btn-send');
+  if (sendEmailButton) {
+    sendEmailButton.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      handleSendEmail();
+    });
+  }
 
   function closeComposeModal() {
     currentDraftId = null;
@@ -1051,5 +1704,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // 12. APP INITIALIZATION
   // ==========================================
   fetchEmails(activeFolder);
+  refreshActionsBadge();
 
 });

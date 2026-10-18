@@ -11,6 +11,7 @@ require('dotenv').config();
 
 const User = require('./models/User');
 const emailRoutes = require('./routes/emailRoutes');
+const taskRoutes = require('./routes/taskRoutes');
 
 // ==========================================
 // 1. APP INITIALIZATION & CONFIGURATION
@@ -30,6 +31,7 @@ if (!MONGODB_URI) {
 app.use(cors()); // Allow cross-origin requests from frontend HTML files
 app.use(express.json()); // Parse JSON request bodies
 app.use('/api/emails', emailRoutes); // Mount modular email CRUD & search routes
+app.use('/api/tasks', taskRoutes); // Mount Email-to-Action Engine task routes
 
 // ==========================================
 // 3. DATABASE CONNECTION
