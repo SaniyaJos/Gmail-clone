@@ -5,6 +5,8 @@
 const mongoose = require('mongoose');
 const Email = require('../models/Email');
 const User = require('../models/User');
+const { classifyIncoming, rememberSenderDecision } = require('../services/spamService');
+const { RETENTION_DAYS } = require('../services/cleanupService');
 
 // ==========================================
 // 1. HELPER FUNCTIONS
@@ -22,6 +24,22 @@ async function addSenderNames(emails) {
     ...email,
     firstName: senderNames.get(email.sender) || null
   }));
+}
+
+/**
+ * For Bin and Spam, tells the frontend how many days are left before the
+ * automatic 30-day deletion (daysLeft) so it can show it in the list.
+ */
+function addExpiryInfo(emails, folder) {
+  if (folder !== 'bin' && folder !== 'spam') return emails;
+
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  return emails.map(email => {
+    const since = folder === 'bin' ? email.trashedAt : email.spamAt;
+    const startedAt = since ? new Date(since).getTime() : Date.now();
+    const daysLeft = Math.max(0, Math.ceil((startedAt + RETENTION_DAYS * DAY_MS - Date.now()) / DAY_MS));
+    return { ...email, daysLeft };
+  });
 }
 
 // ==========================================
@@ -68,10 +86,22 @@ async function createEmail(req, res) {
         isRead: true
       }).save();
 
+      // Run spam detection on the recipient's copy only
+      const verdict = await classifyIncoming({
+        owner: receiver,
+        sender,
+        subject: emailData.subject,
+        body: emailData.body
+      });
+
       await new Email({
         ...emailData,
         owner: receiver.toLowerCase(),
-        isRead: false
+        isRead: false,
+        isSpam: verdict.isSpam,
+        spamAt: verdict.isSpam ? new Date() : null,
+        spamScore: verdict.score,
+        spamReasons: verdict.isSpam ? verdict.reasons : []
       }).save();
     }
 
@@ -94,6 +124,10 @@ async function createEmail(req, res) {
  */
 function buildEmailSearchFilter(queryEmail, folder, searchQuery) {
   const conditions = [{ isTrash: folder === 'bin' }];
+
+  // Spam is only visible in the Spam folder; every other search hides it.
+  // ($ne: true also matches old emails that don't have the isSpam field yet)
+  conditions.push(folder === 'spam' ? { isSpam: true } : { isSpam: { $ne: true } });
 
   // Keep drafts out of normal search results; the Drafts folder searches only drafts
   if (folder !== 'bin') {
@@ -149,7 +183,7 @@ async function getEmails(req, res) {
       const emails = await Email.find(buildEmailSearchFilter(queryEmail, folder, q.trim()))
         .sort({ timestamp: -1 })
         .lean();
-      return res.status(200).json(await addSenderNames(emails));
+      return res.status(200).json(addExpiryInfo(await addSenderNames(emails), folder));
     }
 
     switch (folder) {
@@ -157,20 +191,28 @@ async function getEmails(req, res) {
         filter.receiver = queryEmail;
         filter.isTrash = false;
         filter.isDraft = false;
+        filter.isSpam = { $ne: true };
         break;
       case 'sent':
         filter.sender = queryEmail;
         filter.isTrash = false;
         filter.isDraft = false;
+        filter.isSpam = { $ne: true };
         break;
       case 'starred':
         filter.isStarred = true;
         filter.isTrash = false;
+        filter.isSpam = { $ne: true };
         break;
       case 'drafts':
         filter.sender = queryEmail;
         filter.isTrash = false;
         filter.isDraft = true;
+        break;
+      case 'spam':
+        filter.isSpam = true;
+        filter.isTrash = false;
+        filter.isDraft = false;
         break;
       case 'bin':
         filter.isTrash = true;
@@ -179,11 +221,12 @@ async function getEmails(req, res) {
       default:
         filter.isTrash = false;
         filter.isDraft = false;
+        filter.isSpam = { $ne: true };
         break;
     }
 
     const emails = await Email.find(filter).sort({ timestamp: -1 }).lean();
-    return res.status(200).json(await addSenderNames(emails));
+    return res.status(200).json(addExpiryInfo(await addSenderNames(emails), folder));
   } catch (err) {
     console.error('Fetch emails error:', err);
     return res.status(500).json({ message: 'Internal server error while fetching emails' });
@@ -201,7 +244,8 @@ async function getStarredEmails(req, res) {
     const emails = await Email.find({
       owner: email.toLowerCase(),
       isStarred: true,
-      isTrash: false
+      isTrash: false,
+      isSpam: { $ne: true }
     }).sort({ timestamp: -1 }).lean();
 
     return res.status(200).json(await addSenderNames(emails));
@@ -306,6 +350,13 @@ async function updateEmail(req, res) {
       }
     });
 
+    // Start / reset the 30-day Bin timer whenever an email is trashed or restored
+    if (updateFields.isTrash === true) {
+      updateFields.trashedAt = new Date();
+    } else if (updateFields.isTrash === false) {
+      updateFields.trashedAt = null;
+    }
+
     const email = await Email.findByIdAndUpdate(id, updateFields, {
       new: true,
       runValidators: true
@@ -392,6 +443,151 @@ async function deleteEmail(req, res) {
   }
 }
 
+// ==========================================
+// 8. SPAM ACTIONS (REPORT SPAM / NOT SPAM)
+// ==========================================
+
+/**
+ * Loads an email and makes sure it belongs to the requesting user.
+ * Sends the error response itself and returns null when the check fails.
+ */
+async function findOwnedEmail(req, res) {
+  const { id } = req.params;
+
+  if (!mongoose.isValidObjectId(id)) {
+    res.status(400).json({ message: 'Invalid email ID' });
+    return null;
+  }
+
+  const email = await Email.findById(id);
+  if (!email) {
+    res.status(404).json({ message: 'Email not found' });
+    return null;
+  }
+
+  if (email.owner !== req.user.email) {
+    res.status(403).json({ message: 'You can only change your own emails' });
+    return null;
+  }
+
+  return email;
+}
+
+/**
+ * PATCH /api/emails/:id/report-spam
+ * Moves an email to Spam and remembers the sender, so future mail from
+ * the same sender is delivered straight to Spam.
+ */
+async function reportSpam(req, res) {
+  try {
+    const email = await findOwnedEmail(req, res);
+    if (!email) return;
+
+    if (email.isDraft || email.sender === req.user.email) {
+      return res.status(400).json({ message: 'Only received emails can be reported as spam' });
+    }
+
+    email.isSpam = true;
+    email.spamAt = new Date();
+    email.isTrash = false;
+    email.trashedAt = null;
+    email.isStarred = false;
+    if (!email.spamReasons || email.spamReasons.length === 0) {
+      email.spamReasons = ['You reported this message as spam'];
+    }
+    await email.save();
+
+    await rememberSenderDecision(req.user.email, email.sender, 'blocked');
+
+    return res.status(200).json({ message: 'Message reported as spam', email });
+  } catch (err) {
+    console.error('Report spam error:', err);
+    return res.status(500).json({ message: 'Internal server error while reporting spam' });
+  }
+}
+
+/**
+ * PATCH /api/emails/:id/not-spam
+ * Moves an email back to the Inbox and remembers that this sender is trusted.
+ */
+async function markNotSpam(req, res) {
+  try {
+    const email = await findOwnedEmail(req, res);
+    if (!email) return;
+
+    email.isSpam = false;
+    email.spamAt = null;
+    email.spamScore = 0;
+    email.spamReasons = [];
+    await email.save();
+
+    await rememberSenderDecision(req.user.email, email.sender, 'allowed');
+
+    return res.status(200).json({ message: 'Message moved to Inbox', email });
+  } catch (err) {
+    console.error('Not spam error:', err);
+    return res.status(500).json({ message: 'Internal server error while marking email as not spam' });
+  }
+}
+
+// ==========================================
+// 9. EMPTY BIN / SPAM NOW
+// ==========================================
+
+/**
+ * DELETE /api/emails/folder/:folder/empty   (folder = bin | spam)
+ * Permanently deletes every email in the user's Bin or Spam folder.
+ */
+async function emptyFolder(req, res) {
+  try {
+    const { folder } = req.params;
+    const owner = req.user.email;
+
+    let filter;
+    if (folder === 'bin') {
+      filter = { owner, isTrash: true };
+    } else if (folder === 'spam') {
+      filter = { owner, isSpam: true, isTrash: false };
+    } else {
+      return res.status(400).json({ message: 'Only the bin and spam folders can be emptied' });
+    }
+
+    const result = await Email.deleteMany(filter);
+    return res.status(200).json({
+      message: `Permanently deleted ${result.deletedCount} email(s)`,
+      deletedCount: result.deletedCount
+    });
+  } catch (err) {
+    console.error('Empty folder error:', err);
+    return res.status(500).json({ message: 'Internal server error while emptying folder' });
+  }
+}
+
+// ==========================================
+// 10. SIDEBAR COUNTS
+// ==========================================
+
+/**
+ * GET /api/emails/counts
+ * Returns the number shown next to the Spam folder in the sidebar.
+ */
+async function getFolderCounts(req, res) {
+  try {
+    const owner = req.user.email;
+    const spamUnread = await Email.countDocuments({
+      owner,
+      isSpam: true,
+      isTrash: false,
+      isDraft: false,
+      isRead: false
+    });
+    return res.status(200).json({ spamUnread });
+  } catch (err) {
+    console.error('Folder counts error:', err);
+    return res.status(500).json({ message: 'Internal server error while counting emails' });
+  }
+}
+
 module.exports = {
   createEmail,
   getEmails,
@@ -401,5 +597,9 @@ module.exports = {
   toggleStarredEmail,
   updateEmail,
   updateDraft,
-  deleteEmail
+  deleteEmail,
+  reportSpam,
+  markNotSpam,
+  emptyFolder,
+  getFolderCounts
 };

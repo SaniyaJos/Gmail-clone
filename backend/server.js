@@ -12,6 +12,7 @@ require('dotenv').config();
 const User = require('./models/User');
 const emailRoutes = require('./routes/emailRoutes');
 const taskRoutes = require('./routes/taskRoutes');
+const { startCleanupScheduler } = require('./services/cleanupService');
 
 // ==========================================
 // 1. APP INITIALIZATION & CONFIGURATION
@@ -39,6 +40,8 @@ app.use('/api/tasks', taskRoutes); // Mount Email-to-Action Engine task routes
 mongoose.connect(MONGODB_URI)
   .then(() => {
     console.log('Successfully connected to MongoDB Atlas cluster!');
+    // Auto-delete Bin/Spam emails older than 30 days (runs now, then hourly)
+    startCleanupScheduler();
   })
   .catch((err) => {
     console.error('Error connecting to MongoDB Atlas:', err.message);

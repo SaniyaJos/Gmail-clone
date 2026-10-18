@@ -48,7 +48,42 @@ const emailSchema = new mongoose.Schema({
   isTrash: {
     type: Boolean,
     default: false
+  },
+
+  // ---- Trash (Bin) retention ----
+  // Set when the email is moved to Bin, cleared on restore.
+  // The cleanup job deletes emails whose trashedAt is older than 30 days.
+  trashedAt: {
+    type: Date,
+    default: null
+  },
+
+  // ---- Spam detection ----
+  isSpam: {
+    type: Boolean,
+    default: false
+  },
+  // Set when the email lands in Spam, cleared on "Not spam".
+  // The cleanup job deletes emails whose spamAt is older than 30 days.
+  spamAt: {
+    type: Date,
+    default: null
+  },
+  // Why the email was flagged (shown to the user in the email view)
+  spamReasons: {
+    type: [String],
+    default: []
+  },
+  // Heuristic score from the spam detector (0 when not scored)
+  spamScore: {
+    type: Number,
+    default: 0
   }
 });
+
+// Indexes used by the folder queries and the 30-day cleanup job
+emailSchema.index({ owner: 1, isSpam: 1, isTrash: 1 });
+emailSchema.index({ isTrash: 1, trashedAt: 1 });
+emailSchema.index({ isSpam: 1, spamAt: 1 });
 
 module.exports = mongoose.model('Email', emailSchema);
