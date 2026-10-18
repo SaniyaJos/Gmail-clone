@@ -74,6 +74,29 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentOpenEmail = null;
   let currentDraftId = null; // _id of the draft being edited in compose modal (null = new message)
 
+  // Bin & Spam keep emails for this many days before the backend deletes them automatically.
+  // (Must match RETENTION_DAYS in backend/services/cleanupService.js)
+  const RETENTION_DAYS = 30;
+
+  // Text for the notice banner + confirmation dialog of each folder that is auto-cleaned
+  const FOLDER_NOTICES = {
+    bin: {
+      text: `Messages that have been in Bin for more than ${RETENTION_DAYS} days will be automatically deleted.`,
+      button: 'Empty Bin now',
+      dialogTitle: 'Empty Bin now?',
+      dialogBody: 'All messages in Bin will be permanently deleted. This cannot be undone.'
+    },
+    spam: {
+      text: `Messages that have been in Spam for more than ${RETENTION_DAYS} days will be automatically deleted.`,
+      button: 'Delete all spam messages now',
+      dialogTitle: 'Delete all spam messages now?',
+      dialogBody: 'All messages in Spam will be permanently deleted. This cannot be undone.'
+    }
+  };
+
+  // Same icon as the sidebar Spam item (used in row hover actions)
+  const SPAM_ICON_SVG = '<svg class="action-svg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.86 2h8.28L22 7.86v8.28L16.14 22H7.86L2 16.14V7.86z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+
   // ==========================================
   // 3. DOM ELEMENT REFERENCES
   // ==========================================
@@ -90,6 +113,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const deleteActionBarBtn = document.getElementById('action-delete');
   const restoreActionBarBtn = document.getElementById('action-restore');
   const refreshActionBarBtn = document.getElementById('action-refresh');
+  const spamActionBarBtn = document.getElementById('action-spam');
+  const notSpamActionBarBtn = document.getElementById('action-not-spam');
+
+  // Bin / Spam notice banner + confirmation dialog
+  const folderBanner = document.getElementById('folder-banner');
+  const folderBannerText = document.getElementById('folder-banner-text');
+  const folderBannerBtn = document.getElementById('folder-banner-btn');
+  const confirmEmptyDialog = document.getElementById('confirm-empty-dialog');
+  const confirmEmptyTitle = document.getElementById('confirm-empty-title');
+  const confirmEmptyBody = document.getElementById('confirm-empty-body');
+  const btnCancelEmpty = document.getElementById('btn-cancel-empty');
+  const btnConfirmEmpty = document.getElementById('btn-confirm-empty');
 
   // Search & Filter Controls
   const searchInput = document.getElementById('search-input');
@@ -120,6 +155,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnDetailsBack = document.getElementById('btn-details-back');
   const detailsActionRestore = document.getElementById('details-action-restore');
   const detailsActionDelete = document.getElementById('details-action-delete');
+  const detailsActionSpam = document.getElementById('details-action-spam');
+  const detailsActionNotSpam = document.getElementById('details-action-not-spam');
+  const spamWarning = document.getElementById('spam-warning');
+  const spamWarningReasons = document.getElementById('spam-warning-reasons');
   const detailsStarButton = document.getElementById('details-star-button');
   const detailsStarIcon = detailsStarButton.querySelector('.details-star-icon');
   const detailsSubject = document.getElementById('details-subject');
@@ -168,6 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
       selectAllCheckbox.disabled = true;
       deleteActionBarBtn.disabled = true;
       restoreActionBarBtn.style.display = 'none';
+      folderBanner.style.display = 'none';
       fetchUserTasks();
       refreshActionsBadge();
       return;
@@ -190,6 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
       emailListCache = data;
       renderEmailList(data);
       if (folder !== 'drafts') refreshDraftBadge();
+      refreshSpamBadge();
       refreshActionsBadge();
     } catch (err) {
       console.error('Error fetching emails:', err);
@@ -228,15 +269,98 @@ document.addEventListener('DOMContentLoaded', () => {
     return updateEmailStatus(id, { isTrash: false });
   }
 
+  // Bin and Spam both delete forever (every other folder moves to Bin)
+  function isPermanentDeleteFolder() {
+    return activeFolder === 'bin' || activeFolder === 'spam';
+  }
+
+  // Report spam / Not spam endpoints need the signed-in user (x-user-email header)
+  async function patchEmailAction(id, action) {
+    try {
+      const response = await fetch(`${API_BASE}/emails/${id}/${action}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-user-email': userEmail },
+        body: '{}'
+      });
+      const data = await response.json().catch(() => ({}));
+      return { ok: response.ok, data };
+    } catch (err) {
+      console.error(`Error calling ${action}:`, err);
+      return { ok: false, data: {} };
+    }
+  }
+
+  function reportSpam(id) {
+    return patchEmailAction(id, 'report-spam');
+  }
+
+  function markNotSpam(id) {
+    return patchEmailAction(id, 'not-spam');
+  }
+
+  // Folders where "Report spam" is available (Bin included: reporting moves the mail out of Bin into Spam)
+  const REPORT_SPAM_FOLDERS = ['inbox', 'starred', 'all', 'bin'];
+
+  // Only mail received from someone else can be reported, and only from the folders above
+  function canReportSpam(email) {
+    return Boolean(email)
+      && !email.isDraft
+      && !email.isSpam
+      && email.sender !== userEmail
+      && REPORT_SPAM_FOLDERS.includes(activeFolder);
+  }
+
+  // Sidebar Spam badge = number of unread messages in Spam
+  async function refreshSpamBadge() {
+    try {
+      const response = await fetch(`${API_BASE}/emails/counts`, {
+        headers: { 'x-user-email': userEmail }
+      });
+      if (!response.ok) return;
+      const { spamUnread } = await response.json();
+      const badgeSpam = document.getElementById('badge-spam');
+      if (badgeSpam) badgeSpam.textContent = spamUnread > 0 ? spamUnread : '';
+    } catch (err) {
+      console.error('Error refreshing spam badge:', err);
+    }
+  }
+
+  // Permanently deletes everything in Bin or Spam (the "Empty Bin now" button)
+  async function emptyFolderNow(folder) {
+    const response = await fetch(`${API_BASE}/emails/folder/${folder}/empty`, {
+      method: 'DELETE',
+      headers: { 'x-user-email': userEmail }
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.message || 'Failed to empty folder');
+    }
+    return response.json();
+  }
+
   // ==========================================
   // 5. EMAIL LIST RENDERING
   // ==========================================
+
+  // Shows the 30-day auto-delete notice above the Bin and Spam lists
+  function updateFolderBanner(emailCount) {
+    const notice = FOLDER_NOTICES[activeFolder];
+    if (!notice || activeSearchQuery) {
+      folderBanner.style.display = 'none';
+      return;
+    }
+    folderBannerText.textContent = notice.text;
+    folderBannerBtn.textContent = notice.button;
+    folderBannerBtn.style.display = emailCount > 0 ? '' : 'none'; // nothing to empty
+    folderBanner.style.display = 'flex';
+  }
 
   function renderEmailList(emails) {
     emailListUl.innerHTML = '';
 
     // Update Badge counts for Inbox and Drafts
     if (!activeSearchQuery) updateFolderBadges(emails);
+    updateFolderBanner(emails.length);
 
     if (emails.length === 0) {
       showEmptyState(activeFolder, Boolean(activeSearchQuery));
@@ -256,40 +380,69 @@ document.addEventListener('DOMContentLoaded', () => {
       const formattedDate = formatTimestamp(email.timestamp);
 
       // Determine sender display: if user is sender, display receiver email
-      let displaySender = email.sender === userEmail ? `To: ${email.receiver}` : email.firstName || email.sender.split('@')[0];
+      let displaySender = email.sender === userEmail
+        ? `To: ${escapeHtml(email.receiver)}`
+        : escapeHtml(email.firstName || email.sender.split('@')[0]);
       if (email.isDraft) {
         displaySender = '<span class="draft-label">Draft</span>';
       }
 
-      // Star control (hidden when in Bin)
+      // Star control (hidden when in Bin or Spam)
       const starClass = email.isStarred ? 'starred' : '';
-      const starControl = activeFolder === 'bin'
+      const starControl = (activeFolder === 'bin' || activeFolder === 'spam')
         ? ''
         : `<img src="images/star-regular-full.svg" alt="Star" role="button" tabindex="0" aria-label="${email.isStarred ? 'Unstar email' : 'Star email'}" class="email-row-star ${starClass}" data-id="${email._id}">`;
 
-      // Row hover action buttons (Restore + Delete in Bin; Move to Bin otherwise)
-      const rowActions = activeFolder === 'bin'
-        ? `
+      // Row hover action buttons:
+      //   Bin  -> Report spam (received mail) + Restore + Delete forever
+      //   Spam -> Not spam + Delete forever
+      //   Else -> Report spam (received mail only) + Move to Bin
+      let rowActions;
+      if (activeFolder === 'bin') {
+        const binReportBtn = canReportSpam(email)
+          ? `<button class="action-icon-btn btn-row-spam" data-id="${email._id}" title="Report spam">${SPAM_ICON_SVG}</button>`
+          : '';
+        rowActions = `
+          ${binReportBtn}
           <button class="action-icon-btn btn-row-restore" data-id="${email._id}" title="Restore">
             <span class="restore-icon" aria-hidden="true">&#8630;</span>
           </button>
           <button class="action-icon-btn btn-row-delete" data-id="${email._id}" title="Permanently delete">
             <img src="images/trash-can-regular-full.svg" alt="Delete permanently" class="row-action-icon-img">
           </button>
-        `
-        : `
+        `;
+      } else if (activeFolder === 'spam') {
+        rowActions = `
+          <button class="btn-text-action btn-row-notspam" data-id="${email._id}" title="Not spam">Not spam</button>
+          <button class="action-icon-btn btn-row-delete" data-id="${email._id}" title="Delete forever">
+            <img src="images/trash-can-regular-full.svg" alt="Delete forever" class="row-action-icon-img">
+          </button>
+        `;
+      } else {
+        const reportBtn = canReportSpam(email)
+          ? `<button class="action-icon-btn btn-row-spam" data-id="${email._id}" title="Report spam">${SPAM_ICON_SVG}</button>`
+          : '';
+        rowActions = `
+          ${reportBtn}
           <button class="action-icon-btn btn-row-delete" data-id="${email._id}" title="Move to Bin">
             <img src="images/trash-can-regular-full.svg" alt="Move to Bin" class="row-action-icon-img">
           </button>
         `;
+      }
+
+      // "12 days left" hint (Bin & Spam only - the backend sends daysLeft)
+      const expiryHtml = email.daysLeft !== undefined
+        ? `<span class="email-expiry ${email.daysLeft <= 3 ? 'soon' : ''}">${email.daysLeft} day${email.daysLeft !== 1 ? 's' : ''} left</span>`
+        : '';
 
       li.innerHTML = `
         <input type="checkbox" class="email-row-select" data-id="${email._id}" aria-label="Select mail">
         ${starControl}
         <div class="email-sender">${displaySender}</div>
         <div class="email-content">
-          <span class="email-subject">${email.subject}</span>
-          <span class="email-snippet">— ${email.body.substring(0, 80)}</span>
+          <span class="email-subject">${escapeHtml(email.subject)}</span>
+          <span class="email-snippet">— ${escapeHtml(email.body.substring(0, 80))}</span>
+          ${expiryHtml}
         </div>
         <div class="email-date">${formattedDate}</div>
         <div class="email-row-actions">${rowActions}</div>
@@ -345,7 +498,7 @@ document.addEventListener('DOMContentLoaded', () => {
       deleteBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         const targetId = deleteBtn.getAttribute('data-id');
-        if (activeFolder === 'bin') {
+        if (isPermanentDeleteFolder()) {
           if (confirm('Permanently delete this email?')) {
             await deleteEmailPermanently(targetId);
             fetchEmails(activeFolder);
@@ -362,6 +515,28 @@ document.addEventListener('DOMContentLoaded', () => {
         restoreBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           await restoreEmail(restoreBtn.getAttribute('data-id'));
+          fetchEmails(activeFolder);
+        });
+      }
+
+      // Hover row Report spam event (Inbox / Starred / All Mail / Bin)
+      const spamBtn = li.querySelector('.btn-row-spam');
+      if (spamBtn) {
+        spamBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const { ok } = await reportSpam(email._id);
+          if (!ok) alert('Could not report this message as spam. Please try again.');
+          fetchEmails(activeFolder);
+        });
+      }
+
+      // Hover row Not spam event (Spam only)
+      const notSpamBtn = li.querySelector('.btn-row-notspam');
+      if (notSpamBtn) {
+        notSpamBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const { ok } = await markNotSpam(email._id);
+          if (!ok) alert('Could not move this message to the Inbox. Please try again.');
           fetchEmails(activeFolder);
         });
       }
@@ -387,13 +562,30 @@ document.addEventListener('DOMContentLoaded', () => {
   async function openEmailDetails(email) {
     currentOpenEmail = email;
     emailDetailsModal.style.display = 'flex';
-    detailsActionRestore.style.display = activeFolder === 'bin' ? 'inline-flex' : 'none';
-    detailsActionDelete.title = activeFolder === 'bin' ? 'Permanently delete' : 'Move to Bin';
-    detailsStarButton.style.display = activeFolder === 'bin' ? 'none' : 'inline-flex';
+    const inBin = activeFolder === 'bin';
+    const inSpam = activeFolder === 'spam';
+    detailsActionRestore.style.display = inBin ? 'inline-flex' : 'none';
+    detailsActionDelete.title = inBin ? 'Permanently delete' : inSpam ? 'Delete forever' : 'Move to Bin';
+    detailsStarButton.style.display = (inBin || inSpam) ? 'none' : 'inline-flex';
+
+    // Report spam (received mail in Inbox/Starred/All/Bin) or Not spam (inside Spam)
+    detailsActionSpam.style.display = canReportSpam(email) ? 'flex' : 'none';
+    detailsActionNotSpam.style.display = inSpam ? 'inline-block' : 'none';
+
+    // Explain why the message was flagged
+    if (inSpam) {
+      const reasons = Array.isArray(email.spamReasons) && email.spamReasons.length > 0
+        ? email.spamReasons
+        : ['It looks similar to messages that were previously identified as spam'];
+      spamWarningReasons.textContent = reasons.join(' • ');
+      spamWarning.style.display = 'block';
+    } else {
+      spamWarning.style.display = 'none';
+    }
 
     // Configure Extract Actions button state
     if (btnExtractActions) {
-      btnExtractActions.style.display = (activeFolder === 'bin' || email.isDraft) ? 'none' : 'inline-flex';
+      btnExtractActions.style.display = (inBin || inSpam || email.isDraft) ? 'none' : 'inline-flex';
       btnExtractActions.disabled = false;
       btnExtractSpinner.style.display = 'none';
       btnExtractText.textContent = 'Extract Actions';
@@ -419,7 +611,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Load any existing extracted tasks for this email
-    if (email._id && !email.isDraft && activeFolder !== 'bin') {
+    if (email._id && !email.isDraft && !inBin && !inSpam) {
       fetchEmailTasks(email._id);
     }
   }
@@ -434,6 +626,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function closeDetailsModal() {
     emailDetailsModal.style.display = 'none';
     currentOpenEmail = null;
+    spamWarning.style.display = 'none';
     if (emailTasksSection) {
       emailTasksSection.style.display = 'none';
       emailTasksList.innerHTML = '';
@@ -906,7 +1099,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Details Modal: Star button toggle
   detailsStarButton.addEventListener('click', async (event) => {
     event.stopPropagation();
-    if (!currentOpenEmail || activeFolder === 'bin') return;
+    if (!currentOpenEmail || isPermanentDeleteFolder()) return;
 
     const email = currentOpenEmail;
     const previousState = Boolean(email.isStarred);
@@ -935,7 +1128,7 @@ document.addEventListener('DOMContentLoaded', () => {
   detailsActionDelete.addEventListener('click', async () => {
     if (!currentOpenEmail) return;
 
-    if (activeFolder === 'bin') {
+    if (isPermanentDeleteFolder()) {
       if (confirm('Permanently delete this email?')) {
         await deleteEmailPermanently(currentOpenEmail._id);
         closeDetailsModal();
@@ -946,6 +1139,30 @@ document.addEventListener('DOMContentLoaded', () => {
       closeDetailsModal();
       fetchEmails(activeFolder);
     }
+  });
+
+  // Details Modal: Report spam button
+  detailsActionSpam.addEventListener('click', async () => {
+    if (!currentOpenEmail) return;
+    const { ok } = await reportSpam(currentOpenEmail._id);
+    if (!ok) {
+      alert('Could not report this message as spam. Please try again.');
+      return;
+    }
+    closeDetailsModal();
+    fetchEmails(activeFolder);
+  });
+
+  // Details Modal: Not spam button
+  detailsActionNotSpam.addEventListener('click', async () => {
+    if (!currentOpenEmail || activeFolder !== 'spam') return;
+    const { ok } = await markNotSpam(currentOpenEmail._id);
+    if (!ok) {
+      alert('Could not move this message to the Inbox. Please try again.');
+      return;
+    }
+    closeDetailsModal();
+    fetchEmails(activeFolder);
   });
 
   // Details Modal: Restore button
@@ -1558,12 +1775,12 @@ document.addEventListener('DOMContentLoaded', () => {
   deleteActionBarBtn.addEventListener('click', async () => {
     if (selectedEmailIds.size === 0) return;
 
-    const confirmationMessage = activeFolder === 'bin'
+    const confirmationMessage = isPermanentDeleteFolder()
       ? `Permanently delete ${selectedEmailIds.size} email(s)?`
       : `Move ${selectedEmailIds.size} email(s) to Bin?`;
     if (confirm(confirmationMessage)) {
       const promises = Array.from(selectedEmailIds).map(id => {
-        if (activeFolder === 'bin') {
+        if (isPermanentDeleteFolder()) {
           return deleteEmailPermanently(id);
         } else {
           return updateEmailStatus(id, { isTrash: true });
@@ -1578,6 +1795,37 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Bulk Report spam toolbar button (Inbox / Starred / All Mail / Bin)
+  spamActionBarBtn.addEventListener('click', async () => {
+    const reportableIds = Array.from(selectedEmailIds).filter(id =>
+      canReportSpam(emailListCache.find(e => e._id === id))
+    );
+    if (reportableIds.length === 0) return;
+
+    const results = await Promise.all(reportableIds.map(id => reportSpam(id)));
+    if (results.some(r => !r.ok)) {
+      alert('Some messages could not be reported as spam.');
+    }
+    selectedEmailIds.clear();
+    selectAllCheckbox.checked = false;
+    updateDeleteButtonState();
+    fetchEmails(activeFolder);
+  });
+
+  // Bulk Not spam toolbar button (Spam only)
+  notSpamActionBarBtn.addEventListener('click', async () => {
+    if (activeFolder !== 'spam' || selectedEmailIds.size === 0) return;
+
+    const results = await Promise.all(Array.from(selectedEmailIds).map(id => markNotSpam(id)));
+    if (results.some(r => !r.ok)) {
+      alert('Some messages could not be moved to the Inbox.');
+    }
+    selectedEmailIds.clear();
+    selectAllCheckbox.checked = false;
+    updateDeleteButtonState();
+    fetchEmails(activeFolder);
+  });
+
   // Bulk Restore toolbar button (Bin only)
   restoreActionBarBtn.addEventListener('click', async () => {
     if (activeFolder !== 'bin' || selectedEmailIds.size === 0) return;
@@ -1587,6 +1835,62 @@ document.addEventListener('DOMContentLoaded', () => {
     selectAllCheckbox.checked = false;
     updateDeleteButtonState();
     fetchEmails(activeFolder);
+  });
+
+  // ==========================================
+  // 10.5. EMPTY BIN / DELETE ALL SPAM NOW
+  // ==========================================
+
+  let folderPendingEmpty = null; // 'bin' or 'spam' while the confirmation dialog is open
+
+  function openEmptyFolderDialog() {
+    const notice = FOLDER_NOTICES[activeFolder];
+    if (!notice) return;
+
+    folderPendingEmpty = activeFolder;
+    confirmEmptyTitle.textContent = notice.dialogTitle;
+    confirmEmptyBody.textContent = notice.dialogBody;
+    btnConfirmEmpty.disabled = false;
+    confirmEmptyDialog.style.display = 'flex';
+  }
+
+  function closeEmptyFolderDialog() {
+    confirmEmptyDialog.style.display = 'none';
+    folderPendingEmpty = null;
+  }
+
+  folderBannerBtn.addEventListener('click', openEmptyFolderDialog);
+  btnCancelEmpty.addEventListener('click', closeEmptyFolderDialog);
+
+  // Click on the dark backdrop cancels
+  confirmEmptyDialog.addEventListener('click', (e) => {
+    if (e.target === confirmEmptyDialog) closeEmptyFolderDialog();
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && confirmEmptyDialog.style.display === 'flex') {
+      closeEmptyFolderDialog();
+    }
+  });
+
+  btnConfirmEmpty.addEventListener('click', async () => {
+    const folder = folderPendingEmpty;
+    if (!folder) return;
+
+    btnConfirmEmpty.disabled = true; // prevent double clicks
+    try {
+      await emptyFolderNow(folder);
+      closeEmptyFolderDialog();
+      closeDetailsModal();
+      selectedEmailIds.clear();
+      selectAllCheckbox.checked = false;
+      updateDeleteButtonState();
+      fetchEmails(activeFolder);
+    } catch (err) {
+      console.error('Error emptying folder:', err);
+      closeEmptyFolderDialog();
+      alert(`Could not empty the folder: ${err.message}`);
+    }
   });
 
   // ==========================================
@@ -1603,50 +1907,99 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     restoreActionBarBtn.disabled = !hasSelection;
     restoreActionBarBtn.style.display = activeFolder === 'bin' ? 'flex' : 'none';
-    deleteActionBarBtn.title = activeFolder === 'bin' ? 'Permanently delete' : 'Move to Bin';
+    deleteActionBarBtn.title = activeFolder === 'bin'
+      ? 'Permanently delete'
+      : activeFolder === 'spam' ? 'Delete forever' : 'Move to Bin';
+
+    // Report spam: shown in Inbox / Starred / All Mail / Bin, enabled when a received email is selected
+    const showReportSpam = REPORT_SPAM_FOLDERS.includes(activeFolder);
+    const hasReportable = Array.from(selectedEmailIds).some(id =>
+      canReportSpam(emailListCache.find(e => e._id === id))
+    );
+    spamActionBarBtn.style.display = showReportSpam ? 'flex' : 'none';
+    spamActionBarBtn.disabled = !hasReportable;
+
+    // Not spam: shown only inside the Spam folder
+    notSpamActionBarBtn.style.display = activeFolder === 'spam' ? 'inline-block' : 'none';
+    notSpamActionBarBtn.disabled = !hasSelection;
   }
+
+  // Simple line icons for the empty states (inline SVG, no extra image files needed)
+  const EMPTY_ICON_ATTRS = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+  const EMPTY_ICONS = {
+    inbox: `<svg ${EMPTY_ICON_ATTRS}><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>`,
+    starred: `<svg ${EMPTY_ICON_ATTRS}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+    sent: `<svg ${EMPTY_ICON_ATTRS}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`,
+    drafts: `<svg ${EMPTY_ICON_ATTRS}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>`,
+    spam: `<svg ${EMPTY_ICON_ATTRS}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>`,
+    bin: `<svg ${EMPTY_ICON_ATTRS}><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`,
+    search: `<svg ${EMPTY_ICON_ATTRS}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`
+  };
+
+  // Text + icon for each folder's empty state. "good" = a calm green icon (nothing bad here).
+  const EMPTY_STATES = {
+    inbox: {
+      icon: 'inbox',
+      title: 'Your inbox is empty',
+      subtitle: "You're all caught up. New mail will show up here."
+    },
+    starred: {
+      icon: 'starred',
+      title: 'No starred messages',
+      subtitle: 'Stars let you give messages a special status to make them easier to find.'
+    },
+    sent: {
+      icon: 'sent',
+      title: 'No sent messages',
+      subtitle: "Messages you send will be listed here."
+    },
+    drafts: {
+      icon: 'drafts',
+      title: "You don't have any saved drafts",
+      subtitle: "Saving a draft allows you to keep a message you aren't ready to send yet."
+    },
+    spam: {
+      icon: 'spam',
+      good: true,
+      title: 'No spam, great!',
+      subtitle: `Messages detected as spam appear here and are deleted automatically after ${RETENTION_DAYS} days.`
+    },
+    bin: {
+      icon: 'bin',
+      title: 'Bin is empty',
+      subtitle: `Deleted messages stay here for ${RETENTION_DAYS} days before they are removed for good.`
+    },
+    all: {
+      icon: 'inbox',
+      title: 'No mail yet',
+      subtitle: 'Everything you send and receive will show up here.'
+    }
+  };
 
   // Display empty folder placeholder
   function showEmptyState(folder, searching = false) {
     emptyStateView.style.display = 'flex';
     mailListWrapper.style.display = 'none';
 
+    const icon = document.getElementById('empty-icon');
     const title = emptyStateView.querySelector('.empty-title');
     const subtitle = emptyStateView.querySelector('.empty-subtitle');
 
+    let state;
     if (searching) {
-      title.textContent = 'No matching messages';
-      subtitle.textContent = 'Try different search terms or check the spelling.';
-      return;
+      state = {
+        icon: 'search',
+        title: 'No matching messages',
+        subtitle: 'Try different search terms or check the spelling.'
+      };
+    } else {
+      state = EMPTY_STATES[folder] || EMPTY_STATES.all;
     }
 
-    switch (folder) {
-      case 'inbox':
-        title.textContent = 'Your inbox is empty';
-        subtitle.textContent = "Mails that don't appear in other tabs will be shown here.";
-        break;
-      case 'starred':
-        title.textContent = 'No starred messages';
-        subtitle.textContent = 'Stars let you give messages a special status to make them easier to find.';
-        break;
-      case 'sent':
-        title.textContent = 'No sent messages';
-        subtitle.textContent = 'Send emails to your classmates and review progress here.';
-        break;
-      case 'drafts':
-        title.textContent = "You don't have any saved drafts.";
-        subtitle.textContent = "Saving a draft allows you to keep a message you aren't ready to send yet.";
-        break;
-      case 'bin':
-        title.textContent = 'No messages in Bin';
-        subtitle.textContent = 'Deleted emails will go here and can be permanently purged.';
-        break;
-      case 'all':
-      default:
-        title.textContent = 'No mail found';
-        subtitle.textContent = 'Your search or selection returned zero documents in the database.';
-        break;
-    }
+    icon.innerHTML = EMPTY_ICONS[state.icon] || '';
+    icon.classList.toggle('is-good', Boolean(state.good));
+    title.textContent = state.title;
+    subtitle.textContent = state.subtitle;
   }
 
   // Update folder count badge numbers in sidebar
@@ -1660,6 +2013,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (activeFolder === 'drafts') {
       draftsBadge.textContent = emails.length > 0 ? emails.length : '';
+    }
+    if (activeFolder === 'spam') {
+      const spamBadge = document.getElementById('badge-spam');
+      const unreadSpam = emails.filter(m => !m.isRead).length;
+      spamBadge.textContent = unreadSpam > 0 ? unreadSpam : '';
     }
   }
 
@@ -1705,5 +2063,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================
   fetchEmails(activeFolder);
   refreshActionsBadge();
+  refreshSpamBadge();
+  updateDeleteButtonState(); // sets the initial visibility of Report spam / Not spam buttons
 
 });

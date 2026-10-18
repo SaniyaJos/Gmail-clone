@@ -7,6 +7,8 @@ A web-based Gmail Clone built with HTML, CSS, JavaScript, Node.js, Express, and 
 - Interactive Inbox & Email Interface (Compose, view, star, delete, search, filter emails)
 - Responsive Modern UI design mimicking Gmail
 - RESTful API Backend built with Express & Mongoose
+- Spam Detection: rule-based spam filter, Spam folder with unread count, Report spam / Not spam actions
+- Auto-Delete: Bin and Spam emails are permanently deleted after 30 days (backend cleanup job), plus an "Empty Bin now" button
 
 ## Project Structure
 ```text
@@ -22,6 +24,7 @@ Gmail/
 ├── images/               # Assets and UI icons
 └── backend/              # Express + MongoDB API Server
     ├── models/           # Mongoose Data Schemas (User, Email, etc.)
+    ├── services/         # spamService.js (spam detection), cleanupService.js (30-day auto-delete)
     ├── server.js         # Express Server Entry Point
     ├── package.json      # Dependencies
     └── .env.example      # Sample Environment Variables
