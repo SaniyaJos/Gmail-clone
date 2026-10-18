@@ -433,6 +433,29 @@ body {
   padding: 24px;
 }
 
+.empty-icon {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: var(--color-hover-nav-bg);
+  color: var(--color-text-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.empty-icon svg {
+  width: 44px;
+  height: 44px;
+}
+
+/* Friendly green tint for "nothing bad here" folders */
+.empty-icon.is-good {
+  background: #e6f4ea;
+  color: #137333;
+}
+
 .empty-title {
   font-size: 18px;
   font-weight: 500;
@@ -1966,4 +1989,160 @@ body {
 .btn-dialog-confirm:hover {
   background-color: #0842a0;
   box-shadow: 0 2px 6px rgba(11, 87, 208, 0.4);
+}
+
+/* =========================================================
+   SPAM FOLDER, REPORT SPAM / NOT SPAM, BIN & SPAM 30-DAY BANNER
+   ========================================================= */
+
+/* Sidebar Spam icon (inline SVG, follows the same colors as other folder icons) */
+.spam-nav-icon {
+  flex-shrink: 0;
+  margin-right: 18px;
+  stroke: var(--color-text-medium);
+  transition: stroke var(--transition-speed);
+}
+
+.nav-item.active .spam-nav-icon {
+  stroke: #041e49;
+}
+
+.collapsed .spam-nav-icon {
+  margin-right: 0;
+}
+
+/* Inline SVG icons inside toolbar / details buttons */
+.action-svg-icon {
+  display: block;
+  stroke: var(--color-text-medium);
+  transition: stroke var(--transition-speed);
+}
+
+.action-icon-btn:hover:not(:disabled) .action-svg-icon {
+  stroke: var(--color-text-dark);
+}
+
+.action-icon-btn:disabled .action-svg-icon {
+  opacity: 0.4;
+}
+
+/* Small text button ("Not spam") used in toolbar, details header and row hover actions */
+.btn-text-action {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 100px;
+  color: var(--color-primary-blue);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 4px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color var(--transition-speed), border-color var(--transition-speed);
+}
+
+.btn-text-action:hover:not(:disabled) {
+  background-color: #f2f6fc;
+  border-color: var(--color-primary-blue);
+}
+
+.btn-text-action:disabled {
+  color: var(--color-text-light);
+  cursor: default;
+  opacity: 0.6;
+}
+
+.mail-action-bar .btn-text-action {
+  margin-left: 4px;
+}
+
+/* 30-day auto-delete notice shown above the Bin and Spam lists */
+.folder-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  background-color: #f2f6fc;
+  border-bottom: 1px solid var(--color-border-light);
+  font-size: 13px;
+  color: var(--color-text-medium);
+}
+
+.folder-banner-text {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.folder-banner-btn {
+  background: none;
+  border: none;
+  border-radius: 100px;
+  color: var(--color-primary-blue);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color var(--transition-speed);
+}
+
+.folder-banner-btn:hover {
+  background-color: var(--color-active-nav-bg);
+}
+
+.folder-banner-btn:disabled {
+  color: var(--color-text-light);
+  cursor: default;
+  background: none;
+}
+
+/* "12 days left" hint inside Bin / Spam rows */
+.email-expiry {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--color-text-light);
+  white-space: nowrap;
+}
+
+.email-expiry.soon {
+  color: #d93025;
+  font-weight: 500;
+}
+
+/* "Why is this message in Spam?" box inside the open email */
+.spam-warning {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background-color: #fef7e0;
+  border: 1px solid #fde293;
+  color: #594300;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.spam-warning-title {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+/* Red confirm button for destructive dialogs (Empty Bin / Delete all spam) */
+.btn-dialog-danger {
+  background-color: #d93025;
+  box-shadow: 0 1px 3px rgba(217, 48, 37, 0.3);
+}
+
+.btn-dialog-danger:hover {
+  background-color: #b3261e;
+  box-shadow: 0 2px 6px rgba(217, 48, 37, 0.4);
+}
+
+@media (max-width: 768px) {
+  .folder-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
 }
