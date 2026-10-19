@@ -13,7 +13,21 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const currentUser = JSON.parse(currentUserJson);
+  if (!currentUser.token) {
+    localStorage.removeItem('currentUser');
+    alert('Please sign in again with the backend running to continue securely.');
+    window.location.href = 'signin.html';
+    return;
+  }
   const userEmail = currentUser.email;
+  const authToken = currentUser.token;
+
+  function tokenHeaders(headers = {}) {
+    if (!authToken) {
+      throw new Error('Your secure sign-in session is missing. Please sign in again to use attachments.');
+    }
+    return { ...headers, Authorization: `Bearer ${authToken}` };
+  }
 
   // Set avatar initial title and bind dropdown
   const headerAvatar = document.getElementById('header-avatar');
@@ -73,6 +87,10 @@ document.addEventListener('DOMContentLoaded', () => {
   let selectedEmailIds = new Set();
   let currentOpenEmail = null;
   let currentDraftId = null; // _id of the draft being edited in compose modal (null = new message)
+  let composeAttachments = [];
+  let attachmentUploadInProgress = false;
+  let attachmentRenderSequence = 0;
+  let attachmentObjectUrls = [];
 
   // Bin & Spam keep emails for this many days before the backend deletes them automatically.
   // (Must match RETENTION_DAYS in backend/services/cleanupService.js)
@@ -149,6 +167,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const chipsContainer = document.getElementById('chips-container');
   const emailSubjectInput = document.getElementById('email-subject');
   const emailBodyInput = document.getElementById('email-body');
+  const composeAttachButton = document.getElementById('compose-attach');
+  const composeFileInput = document.getElementById('compose-file-input');
+  const composeAttachmentsList = document.getElementById('compose-attachments');
 
   // Details Modal Elements
   const emailDetailsModal = document.getElementById('email-details-modal');
@@ -168,6 +189,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const detailsReceiverEmail = document.getElementById('details-receiver-email');
   const detailsTimestamp = document.getElementById('details-timestamp');
   const detailsContent = document.getElementById('details-content');
+  const emailInfoToggle = document.getElementById('email-info-toggle');
+  const emailInfoPanel = document.getElementById('email-info-panel');
+  const emailInfoFrom = document.getElementById('email-info-from');
+  const emailInfoTo = document.getElementById('email-info-to');
+  const emailInfoDate = document.getElementById('email-info-date');
+  const emailInfoSubject = document.getElementById('email-info-subject');
+  const emailAttachmentsSection = document.getElementById('email-attachments');
+  const emailAttachmentsList = document.getElementById('email-attachments-list');
 
   // Email-to-Action Engine DOM Elements
   const btnExtractActions = document.getElementById('btn-extract-actions');
@@ -562,6 +591,8 @@ document.addEventListener('DOMContentLoaded', () => {
   async function openEmailDetails(email) {
     currentOpenEmail = email;
     emailDetailsModal.style.display = 'flex';
+    emailInfoPanel.hidden = true;
+    emailInfoToggle.setAttribute('aria-expanded', 'false');
     const inBin = activeFolder === 'bin';
     const inSpam = activeFolder === 'spam';
     detailsActionRestore.style.display = inBin ? 'inline-flex' : 'none';
@@ -597,13 +628,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     detailsSubject.textContent = email.subject;
     setDetailsStarState(email.isStarred);
-    const senderName = email.firstName || email.sender.split('@')[0];
+    const senderName = email.senderName || email.firstName || (email.sender || '').split('@')[0] || 'Unknown sender';
+    const receiverEmail = email.receiver || '';
+    const receiverName = email.receiverName ||
+      (receiverEmail.toLowerCase() === userEmail.toLowerCase()
+        ? `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim()
+        : receiverEmail.split('@')[0]);
     detailsSenderAvatar.textContent = senderName[0].toUpperCase();
     detailsSenderName.textContent = senderName;
-    detailsSenderEmail.textContent = `<${email.sender}>`;
-    detailsReceiverEmail.textContent = `to me ▾`;
+    detailsSenderEmail.textContent = email.sender ? `<${email.sender}>` : '';
+    detailsReceiverEmail.textContent = receiverEmail
+      ? `to ${receiverEmail.toLowerCase() === userEmail.toLowerCase() ? 'me' : receiverName || receiverEmail}`
+      : 'recipient unavailable';
     detailsTimestamp.textContent = formatDetailedTimestamp(email.timestamp);
     detailsContent.textContent = email.body;
+    emailInfoFrom.textContent = email.sender
+      ? `${senderName} <${email.sender}>`
+      : 'Sender details unavailable';
+    emailInfoTo.textContent = receiverEmail
+      ? `${receiverName || receiverEmail} <${receiverEmail}>`
+      : 'Recipient details unavailable';
+    emailInfoDate.textContent = formatFullTimestamp(email.timestamp);
+    emailInfoSubject.textContent = email.subject || '(No Subject)';
+    renderEmailAttachments(email);
 
     // Automatically mark email as read
     if (!email.isRead) {
@@ -626,6 +673,13 @@ document.addEventListener('DOMContentLoaded', () => {
   function closeDetailsModal() {
     emailDetailsModal.style.display = 'none';
     currentOpenEmail = null;
+    emailInfoPanel.hidden = true;
+    emailInfoToggle.setAttribute('aria-expanded', 'false');
+    attachmentRenderSequence += 1;
+    attachmentObjectUrls.forEach(url => URL.revokeObjectURL(url));
+    attachmentObjectUrls = [];
+    emailAttachmentsList.replaceChildren();
+    emailAttachmentsSection.hidden = true;
     spamWarning.style.display = 'none';
     if (emailTasksSection) {
       emailTasksSection.style.display = 'none';
@@ -635,6 +689,133 @@ document.addEventListener('DOMContentLoaded', () => {
       btnExtractActions.disabled = false;
       btnExtractSpinner.style.display = 'none';
       btnExtractText.textContent = 'Extract Actions';
+    }
+  }
+
+  function formatFileSize(bytes) {
+    if (!Number.isFinite(bytes) || bytes < 0) return 'Size unavailable';
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function formatFullTimestamp(timestamp) {
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return 'Date unavailable';
+    return date.toLocaleString([], {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  }
+
+  function clearAttachmentPreviews() {
+    attachmentRenderSequence += 1;
+    attachmentObjectUrls.forEach(url => URL.revokeObjectURL(url));
+    attachmentObjectUrls = [];
+  }
+
+  function renderEmailAttachments(email) {
+    clearAttachmentPreviews();
+    emailAttachmentsList.replaceChildren();
+    const attachments = Array.isArray(email.attachments) ? email.attachments : [];
+    emailAttachmentsSection.hidden = attachments.length === 0;
+    if (attachments.length === 0) return;
+
+    const renderSequence = attachmentRenderSequence;
+    attachments.forEach(attachment => {
+      const card = document.createElement('article');
+      card.className = 'email-attachment-card';
+      const isImage = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(attachment.mimeType);
+      if (isImage) {
+        const preview = document.createElement('img');
+        preview.className = 'email-attachment-preview';
+        preview.alt = `Preview of ${attachment.filename || 'image attachment'}`;
+        preview.src = '';
+        card.appendChild(preview);
+        let previewRequest;
+        try {
+          previewRequest = fetch(`${API_BASE}/emails/${email._id}/attachments/${attachment._id}/preview`, {
+            headers: tokenHeaders()
+          });
+        } catch (err) {
+          const unavailable = document.createElement('span');
+          unavailable.className = 'attachment-preview-unavailable';
+          unavailable.textContent = 'Preview unavailable';
+          preview.replaceWith(unavailable);
+          console.error('Attachment preview failed:', err);
+          previewRequest = null;
+        }
+        if (previewRequest) previewRequest.then(response => {
+          if (!response.ok) throw new Error('Image preview is unavailable');
+          return response.blob();
+        }).then(blob => {
+          const objectUrl = URL.createObjectURL(blob);
+          if (renderSequence !== attachmentRenderSequence) {
+            URL.revokeObjectURL(objectUrl);
+            return;
+          }
+          attachmentObjectUrls.push(objectUrl);
+          preview.src = objectUrl;
+        }).catch(err => {
+          if (renderSequence !== attachmentRenderSequence) return;
+          const unavailable = document.createElement('span');
+          unavailable.className = 'attachment-preview-unavailable';
+          unavailable.textContent = 'Preview unavailable';
+          preview.replaceWith(unavailable);
+          console.error('Attachment preview failed:', err);
+        });
+      } else {
+        const icon = document.createElement('span');
+        icon.className = 'attachment-file-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = 'FILE';
+        card.appendChild(icon);
+      }
+
+      const metadata = document.createElement('div');
+      metadata.className = 'email-attachment-metadata';
+      const filename = document.createElement('div');
+      filename.className = 'email-attachment-name';
+      filename.textContent = attachment.filename || 'Unnamed attachment';
+      const fileType = document.createElement('div');
+      fileType.className = 'email-attachment-type';
+      fileType.textContent = `${attachment.mimeType || 'File'} · ${formatFileSize(attachment.size)}`;
+      metadata.append(filename, fileType);
+      card.appendChild(metadata);
+
+      const downloadButton = document.createElement('button');
+      downloadButton.type = 'button';
+      downloadButton.className = 'attachment-download-button';
+      downloadButton.textContent = 'Download';
+      downloadButton.addEventListener('click', () => downloadAttachment(email, attachment));
+      card.appendChild(downloadButton);
+      emailAttachmentsList.appendChild(card);
+    });
+  }
+
+  async function downloadAttachment(email, attachment) {
+    try {
+      const response = await fetch(
+        `${API_BASE}/emails/${email._id}/attachments/${attachment._id}/download`,
+        { headers: tokenHeaders() }
+      );
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || 'The attachment could not be downloaded.');
+      }
+      const objectUrl = URL.createObjectURL(await response.blob());
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = attachment.filename || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (err) {
+      console.error('Attachment download failed:', err);
+      alert(err.message);
     }
   }
 
@@ -1096,6 +1277,12 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchEmails(activeFolder);
   });
 
+  emailInfoToggle.addEventListener('click', () => {
+    const isExpanded = emailInfoToggle.getAttribute('aria-expanded') === 'true';
+    emailInfoToggle.setAttribute('aria-expanded', String(!isExpanded));
+    emailInfoPanel.hidden = isExpanded;
+  });
+
   // Details Modal: Star button toggle
   detailsStarButton.addEventListener('click', async (event) => {
     event.stopPropagation();
@@ -1292,7 +1479,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Close compose modal (auto-saves draft)
   composeCloseBtn.addEventListener('click', async () => {
-    await saveDraft();
+    if (!await saveDraft()) return;
     closeComposeModal();
     fetchEmails(activeFolder);
   });
@@ -1351,6 +1538,149 @@ document.addEventListener('DOMContentLoaded', () => {
     chipsContainer.insertBefore(chip, emailToInput);
     emailToInput.value = '';
   };
+
+  const ALLOWED_ATTACHMENT_TYPES = {
+    'image/jpeg': ['.jpg', '.jpeg'],
+    'image/png': ['.png'],
+    'image/gif': ['.gif'],
+    'image/webp': ['.webp'],
+    'application/pdf': ['.pdf'],
+    'text/plain': ['.txt'],
+    'text/csv': ['.csv'],
+    'application/zip': ['.zip'],
+    'application/msword': ['.doc'],
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+    'application/vnd.ms-excel': ['.xls'],
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+    'application/vnd.ms-powerpoint': ['.ppt'],
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['.pptx']
+  };
+  const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+  const MAX_DRAFT_ATTACHMENTS = 10;
+
+  function renderComposeAttachments() {
+    composeAttachmentsList.replaceChildren();
+    composeAttachments.forEach(attachment => {
+      const chip = document.createElement('div');
+      chip.className = 'compose-attachment-chip';
+      const label = document.createElement('span');
+      label.className = 'compose-attachment-label';
+      label.textContent = `${attachment.filename} · ${formatFileSize(attachment.size)}`;
+      label.title = `${attachment.filename} (${formatFileSize(attachment.size)})`;
+      const removeButton = document.createElement('button');
+      removeButton.type = 'button';
+      removeButton.className = 'compose-attachment-remove';
+      removeButton.setAttribute('aria-label', `Remove ${attachment.filename}`);
+      removeButton.textContent = '×';
+      removeButton.addEventListener('click', () => removeComposeAttachment(attachment));
+      chip.append(label, removeButton);
+      composeAttachmentsList.appendChild(chip);
+    });
+  }
+
+  async function ensureDraftForAttachments() {
+    if (currentDraftId) return;
+    const { receiver, subject, body } = getComposeData();
+    const response = await fetch(`${API_BASE}/emails`, {
+      method: 'POST',
+      headers: tokenHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ sender: userEmail, receiver, subject, body, isDraft: true })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Could not prepare a draft for attachments.');
+    currentDraftId = data.email._id;
+  }
+
+  async function uploadComposeAttachments(files) {
+    const acceptedFiles = [];
+    const rejectedFiles = [];
+    const seenKeys = new Set(composeAttachments.map(attachment =>
+      `${attachment.filename.toLowerCase()}|${attachment.size}|${attachment.mimeType}`
+    ));
+
+    for (const file of files) {
+      const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+      const acceptedExtensions = ALLOWED_ATTACHMENT_TYPES[file.type];
+      if (!acceptedExtensions || !acceptedExtensions.includes(extension)) {
+        rejectedFiles.push(`${file.name}: unsupported file type`);
+      } else if (file.size > MAX_ATTACHMENT_SIZE) {
+        rejectedFiles.push(`${file.name}: larger than 10 MB`);
+      } else {
+        const duplicateKey = `${file.name.toLowerCase()}|${file.size}|${file.type}`;
+        if (seenKeys.has(duplicateKey)) {
+          rejectedFiles.push(`${file.name}: duplicate attachment`);
+        } else {
+          seenKeys.add(duplicateKey);
+          acceptedFiles.push(file);
+        }
+      }
+    }
+
+    const availableSlots = MAX_DRAFT_ATTACHMENTS - composeAttachments.length;
+    if (acceptedFiles.length > availableSlots) {
+      rejectedFiles.push(`Only ${availableSlots} attachment slot(s) remain (maximum ${MAX_DRAFT_ATTACHMENTS}).`);
+      acceptedFiles.splice(Math.max(0, availableSlots));
+    }
+    if (rejectedFiles.length > 0) {
+      alert(`Some files were not added:\n${rejectedFiles.join('\n')}`);
+    }
+    if (acceptedFiles.length === 0) return;
+
+    attachmentUploadInProgress = true;
+    composeAttachButton.disabled = true;
+    composeCloseBtn.disabled = true;
+    composeDiscardBtn.disabled = true;
+    const sendButton = document.getElementById('btn-send-email');
+    sendButton.disabled = true;
+    try {
+      await ensureDraftForAttachments();
+      const formData = new FormData();
+      acceptedFiles.forEach(file => formData.append('attachments', file));
+      const response = await fetch(`${API_BASE}/emails/${currentDraftId}/attachments`, {
+        method: 'POST',
+        headers: tokenHeaders(),
+        body: formData
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Could not upload selected files.');
+      composeAttachments = data.attachments || [];
+      renderComposeAttachments();
+      refreshDraftBadge();
+    } catch (err) {
+      console.error('Attachment upload failed:', err);
+      alert(err.message || 'Attachment upload failed. Please try again.');
+    } finally {
+      attachmentUploadInProgress = false;
+      composeAttachButton.disabled = false;
+      composeCloseBtn.disabled = false;
+      composeDiscardBtn.disabled = false;
+      sendButton.disabled = false;
+    }
+  }
+
+  async function removeComposeAttachment(attachment) {
+    if (!currentDraftId) return;
+    try {
+      const response = await fetch(
+        `${API_BASE}/emails/${currentDraftId}/attachments/${attachment._id}`,
+        { method: 'DELETE', headers: tokenHeaders() }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Could not remove this attachment.');
+      composeAttachments = data.attachments || [];
+      renderComposeAttachments();
+    } catch (err) {
+      console.error('Attachment removal failed:', err);
+      alert(err.message || 'Could not remove this attachment.');
+    }
+  }
+
+  composeAttachButton.addEventListener('click', () => composeFileInput.click());
+  composeFileInput.addEventListener('change', () => {
+    const selectedFiles = Array.from(composeFileInput.files || []);
+    composeFileInput.value = '';
+    uploadComposeAttachments(selectedFiles);
+  });
 
   // Check recipient on Enter key
   emailToInput.addEventListener('keydown', async (e) => {
@@ -1549,31 +1879,40 @@ document.addEventListener('DOMContentLoaded', () => {
     const body = emailBodyInput.value;
 
     async function executeSend(finalSubject) {
-      let anySuccess = false;
+      const sentRecipients = [];
+      const failedRecipients = [];
+      const failureMessages = [];
       for (const receiver of recipientEmails) {
         try {
           const response = await fetch(`${API_BASE}/emails`, {
             method: 'POST',
-            headers: {
+            headers: tokenHeaders({
               'Content-Type': 'application/json'
-            },
+            }),
             body: JSON.stringify({
               sender: userEmail,
               receiver,
               subject: finalSubject || '(No Subject)',
-              body
+              body,
+              ...(currentDraftId ? { draftId: currentDraftId } : {})
             })
           });
 
           if (response.ok) {
-            anySuccess = true;
+            sentRecipients.push(receiver);
+          } else {
+            const data = await response.json().catch(() => ({}));
+            failedRecipients.push(receiver);
+            failureMessages.push(data.message || `Could not send to ${receiver}.`);
           }
         } catch (err) {
           console.error(`Send email to ${receiver} connection failed:`, err);
+          failedRecipients.push(receiver);
+          failureMessages.push(err.message || `Could not send to ${receiver}.`);
         }
       }
 
-      if (anySuccess) {
+      if (sentRecipients.length > 0 && failedRecipients.length === 0) {
         // If this message started as a draft, remove the draft now that it was sent
         if (currentDraftId) {
           await deleteEmailPermanently(currentDraftId);
@@ -1581,9 +1920,13 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('Email sent successfully!');
         closeComposeModal();
         fetchEmails(activeFolder);
+      } else if (sentRecipients.length > 0) {
+        chipsContainer.querySelectorAll('.recipient-chip').forEach(chip => chip.remove());
+        failedRecipients.forEach(addRecipientChip);
+        await saveDraft();
+        alert(`Sent to ${sentRecipients.join(', ')}.\nCould not send to ${failedRecipients.join(', ')}. The unsent recipients remain in the draft.\n\n${failureMessages.join('\n')}`);
       } else {
-        alert(`Connection Offline!\n\nEmail sent (Simulated):\nTo: ${recipientEmails.join(', ')}\nSubject: ${finalSubject}`);
-        closeComposeModal();
+        alert(`Email was not sent. Your compose window and draft have been kept.\n\n${failureMessages.join('\n')}`);
       }
     }
 
@@ -1610,8 +1953,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function closeComposeModal() {
     currentDraftId = null;
+    composeAttachments = [];
     composeModal.style.display = 'none';
     composeForm.reset();
+    renderComposeAttachments();
     if (chipsContainer) {
       const chips = chipsContainer.querySelectorAll('.recipient-chip');
       chips.forEach(chip => chip.remove());
@@ -1639,41 +1984,52 @@ document.addEventListener('DOMContentLoaded', () => {
   // Save (create or update) draft in database; delete if user emptied everything
   async function saveDraft() {
     const { receiver, subject, body } = getComposeData();
-    const isEmpty = !receiver && !subject && !body.trim();
+    const isEmpty = !receiver && !subject && !body.trim() && composeAttachments.length === 0;
 
     try {
       if (isEmpty) {
-        if (currentDraftId) await deleteEmailPermanently(currentDraftId);
-        return;
+        if (currentDraftId) {
+          await deleteEmailPermanently(currentDraftId);
+          currentDraftId = null;
+        }
+        return true;
       }
 
       if (currentDraftId) {
         const response = await fetch(`${API_BASE}/emails/${currentDraftId}/draft`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: tokenHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({ receiver, subject, body })
         });
-        if (!response.ok) throw new Error('Failed to update draft');
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.message || 'Failed to update draft.');
       } else {
         const response = await fetch(`${API_BASE}/emails`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: tokenHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({ sender: userEmail, receiver, subject, body, isDraft: true })
         });
-        if (!response.ok) throw new Error('Failed to save draft');
         const data = await response.json();
+        if (!response.ok) throw new Error(data.message || 'Failed to save draft.');
         currentDraftId = data.email._id;
       }
+      return true;
     } catch (err) {
       console.error('Error saving draft:', err);
+      alert(err.message || 'Could not save this draft. Your compose window will stay open.');
+      return false;
     }
   }
 
   // Open an existing saved draft inside the compose modal to continue editing
   async function openDraftInCompose(draft) {
+    if (attachmentUploadInProgress) {
+      alert('Please wait for the selected attachments to finish uploading.');
+      return;
+    }
     // If another message is already open, keep it as draft first
     if (composeModal.style.display === 'flex') {
-      await saveDraft();
+      if (!await saveDraft()) return;
       closeComposeModal();
     }
 
@@ -1693,6 +2049,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     emailSubjectInput.value = draft.subject === '(No Subject)' ? '' : draft.subject;
     emailBodyInput.value = draft.body;
+    composeAttachments = Array.isArray(draft.attachments) ? draft.attachments : [];
+    renderComposeAttachments();
 
     composeModal.style.display = 'flex';
     emailBodyInput.focus();
@@ -2035,6 +2393,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Format detailed timestamp for overlay view
   function formatDetailedTimestamp(timestampStr) {
     const date = new Date(timestampStr);
+    if (Number.isNaN(date.getTime())) return 'Date unavailable';
     const options = { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
     const dateStr = date.toLocaleString('en-US', options);
 

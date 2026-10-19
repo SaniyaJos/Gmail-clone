@@ -7,6 +7,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const User = require('./models/User');
@@ -20,9 +21,14 @@ const { startCleanupScheduler } = require('./services/cleanupService');
 const app = express();
 const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI;
+const JWT_SECRET = process.env.JWT_SECRET;
 
 if (!MONGODB_URI) {
   console.error('CRITICAL ERROR: MONGODB_URI is not defined in the environment variables (.env file)!');
+  process.exit(1);
+}
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+  console.error('CRITICAL ERROR: JWT_SECRET must be set to a random value of at least 32 characters in backend/.env!');
   process.exit(1);
 }
 
@@ -142,7 +148,12 @@ app.post('/api/signin', async (req, res) => {
         id: user._id,
         firstName: user.firstName,
         lastName: user.lastName,
-        email: user.email
+        email: user.email,
+        token: jwt.sign({ email: user.email }, JWT_SECRET, {
+          algorithm: 'HS256',
+          expiresIn: '8h',
+          issuer: 'inboxflow'
+        })
       }
     });
 

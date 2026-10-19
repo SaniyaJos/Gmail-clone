@@ -29,6 +29,25 @@ const emailSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  attachments: [{
+    filename: {
+      type: String,
+      required: true
+    },
+    mimeType: {
+      type: String,
+      required: true
+    },
+    size: {
+      type: Number,
+      required: true,
+      min: 0
+    },
+    storageName: {
+      type: String,
+      required: true
+    }
+  }],
   timestamp: {
     type: Date,
     default: Date.now

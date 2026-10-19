@@ -9,6 +9,7 @@ A web-based Gmail Clone built with HTML, CSS, JavaScript, Node.js, Express, and 
 - RESTful API Backend built with Express & Mongoose
 - Spam Detection: rule-based spam filter, Spam folder with unread count, Report spam / Not spam actions
 - Auto-Delete: Bin and Spam emails are permanently deleted after 30 days (backend cleanup job), plus an "Empty Bin now" button
+- Email attachments with private storage, authenticated downloads, and message details
 
 ## Project Structure
 ```text
@@ -24,7 +25,9 @@ Gmail/
 ├── images/               # Assets and UI icons
 └── backend/              # Express + MongoDB API Server
     ├── models/           # Mongoose Data Schemas (User, Email, etc.)
-    ├── services/         # spamService.js (spam detection), cleanupService.js (30-day auto-delete)
+    ├── controllers/      # Email and attachment API handlers
+    ├── middleware/       # Identity checks and validated multipart upload
+    ├── services/         # Spam, cleanup, and private attachment storage
     ├── server.js         # Express Server Entry Point
     ├── package.json      # Dependencies
     └── .env.example      # Sample Environment Variables
@@ -45,7 +48,9 @@ Gmail/
    ```env
    PORT=5000
    MONGODB_URI=your_mongodb_connection_string
+   JWT_SECRET=your_random_secret_of_at_least_32_characters
    ```
+   Generate a secret with Node.js using `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` and keep it private. The backend refuses to start without it. Sign-in issues an eight-hour token used to authorize attachment access.
 4. Start the backend server:
    - For production / normal run:
      ```bash
@@ -58,6 +63,36 @@ Gmail/
 
 ### 2. Frontend Setup
 - Open `index.html` or `signin.html` directly in your browser or run with Live Server (VS Code extension).
+
+## Email Attachments
+
+- Attachments are stored in the private `backend/uploads/` directory; only their filename, MIME type, byte size, and opaque storage reference are stored in each MongoDB email record. The upload directory is git-ignored and is never served as a static directory.
+- Uploads are limited to 10 files per draft, with a maximum of 10 MB per file. Allowed types are common JPEG/PNG/GIF/WebP images, PDF, plain text, CSV, ZIP, and Microsoft Word/Excel/PowerPoint documents. The backend checks both the supplied MIME type and filename extension; it does not claim to inspect or verify file contents.
+- Image previews and downloads require a valid bearer token and an email record owned by that signed-in account. Tokens are issued by `/api/signin` and expire after eight hours.
+- Attachments stay with drafts, are copied to sent and recipient email records when sent, and are removed from disk when no email record references them. Image previews are limited to JPEG, PNG, GIF, and WebP.
+
+### Postman smoke test
+
+1. **Sign in:** `POST http://localhost:5000/api/signin` with JSON such as:
+   ```json
+   { "email": "sender@flow.com", "password": "your-password" }
+   ```
+   Copy `user.token` from the response.
+2. **Create a draft:** `POST http://localhost:5000/api/emails`, set `Authorization: Bearer <token>` and `Content-Type: application/json`, and send:
+   ```json
+   {
+     "sender": "sender@flow.com",
+     "receiver": "recipient@flow.com",
+     "subject": "Files attached",
+     "body": "See the attached files.",
+     "isDraft": true
+   }
+   ```
+   Copy `email._id` from the response.
+3. **Upload files:** `POST http://localhost:5000/api/emails/<draftId>/attachments`, set `Authorization: Bearer <token>`, choose **Body → form-data**, and add one or more file fields named `attachments`. Postman supplies the multipart content type.
+4. **Send the draft:** `POST http://localhost:5000/api/emails` with the bearer token and JSON `sender`, `receiver`, `subject`, `body`, and `draftId`. The application’s compose flow includes this `draftId` automatically so the stored attachment references are copied to the sent and received email records.
+5. **Download:** use `GET http://localhost:5000/api/emails/<ownedEmailId>/attachments/<attachmentId>/download` with the same bearer token. The attachment id is in the email’s `attachments` metadata.
+6. **Remove from draft:** use `DELETE http://localhost:5000/api/emails/<draftId>/attachments/<attachmentId>` with the bearer token. A request without a token should return `401`; unsupported types return `415`; files over 10 MB return `413`.
 
 ## Security Note
 Make sure never to commit your actual `.env` file containing sensitive database credentials. `.env` is listed in `.gitignore`.
