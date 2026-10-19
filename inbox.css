@@ -544,6 +544,13 @@ body {
   padding-right: 12px;
 }
 
+.email-thread-count {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-medium);
+  margin-left: 4px;
+}
+
 .email-content {
   flex: 1;
   display: flex;
@@ -936,9 +943,10 @@ body {
 
 .details-sender-info {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 24px;
   position: relative;
+  width: 100%;
 }
 
 .sender-avatar {
@@ -953,17 +961,21 @@ body {
   justify-content: center;
   margin-right: 12px;
   text-transform: uppercase;
+  flex-shrink: 0;
 }
 
 .sender-metadata {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-width: 0;
 }
 
 .sender-identity {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .sender-name {
@@ -979,6 +991,9 @@ body {
 
 .receiver-row {
   margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
 }
 
 .receiver-email {
@@ -986,21 +1001,481 @@ body {
   color: var(--color-text-medium);
 }
 
+.details-sender-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
 .details-time {
-  position: absolute;
-  right: 0;
-  top: 4px;
   font-size: 12px;
   font-weight: 400;
   color: var(--color-text-medium);
+  white-space: nowrap;
+}
+
+.details-header-star-btn,
+.thread-star-btn,
+.details-header-reply-btn,
+.thread-quick-reply-btn,
+.details-header-forward-btn,
+.thread-forward-btn,
+.details-header-delete-btn,
+.thread-delete-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-medium);
+  transition: background-color var(--transition-speed), color var(--transition-speed);
+}
+
+.details-header-star-btn:hover,
+.thread-star-btn:hover,
+.details-header-reply-btn:hover,
+.thread-quick-reply-btn:hover,
+.details-header-forward-btn:hover,
+.thread-forward-btn:hover,
+.details-header-delete-btn:hover,
+.thread-delete-btn:hover {
+  background-color: var(--color-hover);
+  color: var(--color-text-dark);
+}
+
+.details-header-star-btn.starred,
+.thread-star-btn.starred {
+  color: #f4b400 !important;
+}
+
+.details-header-star-btn.starred svg,
+.thread-star-btn.starred svg {
+  fill: #f4b400 !important;
+}
+
+/* Gmail-style Deleted Messages in Conversation Banner */
+.thread-deleted-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  background-color: #f8f9fa;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: #3c4043;
+  margin-bottom: 16px;
+  margin-top: 4px;
+  font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  line-height: 1.5;
+}
+
+.thread-deleted-text {
+  font-weight: 400;
+  color: #3c4043;
+  font-family: inherit;
+}
+
+.thread-deleted-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: inherit;
+}
+
+.thread-deleted-link {
+  background: none;
+  border: none;
+  color: #1a73e8;
+  cursor: pointer;
+  padding: 0;
+  font-size: 13px;
+  font-family: inherit;
+  text-decoration: none;
+}
+
+.thread-deleted-link:hover {
+  text-decoration: underline;
+}
+
+.thread-deleted-sep {
+  color: #3c4043;
+  font-family: inherit;
+}
+
+.thread-deleted-forever-wrap {
+  display: inline-flex;
+  align-items: baseline;
+  font-family: inherit;
+  color: #3c4043;
+}
+
+.thread-deleted-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.thread-message-card.deleted-card {
+  background-color: #fff8f7;
+  border-color: #fce8e6;
+  opacity: 0.98;
+  font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+}
+
+/* Dedicated Action Buttons on Trashed Message Cards */
+.deleted-msg-restore-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #1a73e8;
+  background-color: #ffffff;
+  border: 1px solid #dadce0;
+  border-radius: 100px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  transition: all 0.15s ease;
+  line-height: 1.4;
+  text-decoration: none;
+  height: auto !important;
+  width: auto !important;
+}
+
+.deleted-msg-restore-btn:hover {
+  background-color: #f1f3f4;
+  border-color: #1a73e8;
+  color: #1557b0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.deleted-msg-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #d93025;
+  background-color: #ffffff;
+  border: 1px solid #fce8e6;
+  border-radius: 100px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  transition: all 0.15s ease;
+  line-height: 1.4;
+  text-decoration: none;
+  height: auto !important;
+  width: auto !important;
+}
+
+.deleted-msg-delete-btn:hover {
+  background-color: #fce8e6;
+  border-color: #d93025;
+  color: #b31412;
+  box-shadow: 0 1px 2px rgba(217, 48, 37, 0.12);
+}
+
+.thread-bin-badge {
+  background-color: #fce8e6 !important;
+  color: #c5221f !important;
+  border: 1px solid #fad2cf;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.details-sender-info.has-previous-messages {
+  border-top: 1px solid #e8eaed;
+  padding-top: 20px;
+  margin-top: 12px;
 }
 
 .details-content {
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.6;
   color: var(--color-text-dark);
-  white-space: pre-wrap; /* maintain line breaks */
+  white-space: pre-wrap;
+  word-break: break-word;
   padding-left: 52px;
+  margin-top: 8px;
+  margin-bottom: 24px;
+}
+
+.thread-older-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+
+
+/* Thread Message Card */
+.thread-message-card {
+  border: 1px solid #e0e2e5;
+  border-radius: 12px;
+  background-color: #ffffff;
+  padding: 16px 20px;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+/* Collapsed Message Card (older messages) */
+.thread-message-card.collapsed {
+  cursor: pointer;
+  padding: 10px 16px;
+  background-color: #f8f9fa;
+  border-color: #e8eaed;
+}
+
+.thread-message-card.collapsed:hover {
+  background-color: #f1f3f4;
+  border-color: #dadce0;
+}
+
+.thread-message-collapsed-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.thread-collapsed-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: #e3e4e6;
+  color: var(--color-text-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+
+.thread-collapsed-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--color-text-dark);
+  min-width: 120px;
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
+.thread-collapsed-snippet {
+  flex: 1;
+  font-size: 13px;
+  color: var(--color-text-medium);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.thread-collapsed-time {
+  font-size: 12px;
+  color: var(--color-text-medium);
+  white-space: nowrap;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* Expanded Message Card */
+.thread-message-card:not(.collapsed) {
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.08);
+}
+
+.thread-message-header {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 14px;
+  position: relative;
+}
+
+.thread-sender-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #e3e4e6;
+  color: var(--color-text-dark);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.thread-sender-meta {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.thread-sender-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.thread-sender-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--color-text-dark);
+}
+
+.thread-sender-email {
+  font-size: 12px;
+  color: var(--color-text-medium);
+}
+
+.thread-receiver-row {
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-text-medium);
+}
+
+.thread-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.thread-time {
+  font-size: 12px;
+  color: var(--color-text-medium);
+  white-space: nowrap;
+  margin-right: 4px;
+}
+
+.thread-quick-reply-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-medium);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background-color var(--transition-speed), color var(--transition-speed);
+}
+
+.thread-quick-reply-btn:hover {
+  background-color: var(--color-hover);
+  color: var(--color-text-dark);
+}
+
+.thread-message-body {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text-dark);
+  white-space: pre-wrap;
+  padding-left: 52px;
+  word-break: break-word;
+}
+
+.thread-message-attachments {
+  margin-top: 12px;
+  padding-left: 52px;
+}
+
+/* Gmail-style Quoted Messages with Vertical Gray Line */
+.gmail-quote-header {
+  margin-top: 14px;
+  margin-bottom: 2px;
+  color: var(--color-text-dark);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.gmail-quote {
+  margin: 4px 0 4px 0;
+  border-left: 1px solid #cccccc;
+  padding-left: 12px;
+  color: var(--color-text-dark);
+  line-height: 1.6;
+}
+
+.gmail-quote > .gmail-quote {
+  margin-top: 4px;
+}
+
+/* Gmail-style Reply & Forward Action Bar at Bottom of Email */
+.details-reply-forward-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 32px;
+  margin-bottom: 24px;
+  padding-left: 52px;
+}
+
+.btn-detail-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 24px;
+  background-color: #ffffff;
+  border: 1px solid #747775;
+  border-radius: 19px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: #444746;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
+}
+
+.btn-detail-action svg {
+  flex-shrink: 0;
+  color: #444746;
+  transition: transform 0.15s ease;
+}
+
+.btn-detail-action:hover {
+  background-color: #f2f3f5;
+  border-color: #444746;
+  color: #1f1f1f;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.15);
+}
+
+.btn-detail-action:hover svg {
+  transform: scale(1.08);
+}
+
+.btn-detail-action:active {
+  background-color: #e8eaed;
 }
 
 /* Sidebar Toggle behavior (Responsive support) */
@@ -1078,6 +1553,22 @@ body {
 .action-bar-icon-img {
   width: 18px;
   height: 18px;
+  transition: transform 0.2s ease;
+}
+
+/* Gmail-style Refresh Spin Animation */
+@keyframes refresh-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.action-icon-btn.refreshing .action-bar-icon-img {
+  animation: refresh-spin 0.75s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
 }
 
 /* Hover effects for buttons containing SVGs */
@@ -1801,6 +2292,40 @@ body {
   color: #041e49;
 }
 
+.task-email-ref.in-trash {
+  background-color: #fef7e0;
+  color: #b06000;
+  border: 1px solid #f9ab00;
+}
+
+.task-email-ref.in-trash:hover {
+  background-color: #feefc3;
+  color: #8c4700;
+}
+
+.task-email-ref.in-spam {
+  background-color: #fce8e6;
+  color: #c5221f;
+  border: 1px solid #f28b82;
+}
+
+.task-email-ref.in-spam:hover {
+  background-color: #fad2cf;
+  color: #a51d24;
+}
+
+.task-email-ref.deleted {
+  background-color: #f8f9fa;
+  color: #5f6368;
+  border: 1px dashed #c6c6c6;
+  cursor: default;
+}
+
+.task-email-ref.deleted:hover {
+  background-color: #f8f9fa;
+  color: #5f6368;
+}
+
 /* Task Actions (Delete, etc.) */
 .task-actions {
   display: flex;
@@ -2320,26 +2845,34 @@ body {
 .email-attachment-card {
   display: grid;
   grid-template-columns: 88px minmax(0, 1fr);
+  grid-template-rows: auto auto;
   align-items: center;
-  gap: 10px;
-  width: min(100%, 320px);
-  min-height: 76px;
-  padding: 8px;
+  gap: 4px 12px;
+  width: min(100%, 340px);
+  min-height: 80px;
+  padding: 8px 12px;
   border: 1px solid #dadce0;
   border-radius: 8px;
   background: #fff;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.email-attachment-card:hover {
+  border-color: #c0c4cc;
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.2);
 }
 
 .email-attachment-preview,
 .attachment-preview-unavailable,
 .attachment-file-icon {
+  grid-row: 1 / span 2;
   display: flex;
   width: 88px;
-  height: 60px;
+  height: 64px;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border-radius: 4px;
+  border-radius: 6px;
   background: #f1f3f4;
   color: #5f6368;
   object-fit: cover;
@@ -2347,39 +2880,68 @@ body {
 }
 
 .attachment-file-icon {
+  background: #e8f0fe;
   color: #1a73e8;
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.5px;
 }
 
 .email-attachment-metadata {
+  grid-column: 2;
+  grid-row: 1;
   min-width: 0;
+  padding-top: 2px;
 }
 
 .email-attachment-name {
   overflow: hidden;
   color: #202124;
   font-size: 13px;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.4;
 }
 
 .email-attachment-type {
-  margin-top: 4px;
+  margin-top: 2px;
   overflow-wrap: anywhere;
   color: #5f6368;
-  font-size: 11px;
-}
-
-.attachment-download-button {
-  grid-column: 2;
-  justify-self: start;
-  padding: 5px 10px;
-  color: #1a73e8;
   font-size: 12px;
+  line-height: 1.3;
 }
 
-.attachment-download-button:hover {
+.attachment-download-button,
+.email-attachment-download {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  margin-top: 2px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #1a73e8;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.attachment-download-button:hover,
+.email-attachment-download:hover {
   background: #f1f3f4;
+  color: #174ea6;
+}
+
+.attachment-download-button svg,
+.email-attachment-download svg {
+  flex-shrink: 0;
 }
 
 @media (max-width: 768px) {
@@ -2406,3 +2968,101 @@ body {
     width: 72px;
   }
 }
+
+/* ==========================================================================
+   Gmail-Style Floating Toast / Snackbar (Undo Send & Undo Delete)
+   ========================================================================== */
+.toast-snackbar {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 280px;
+  max-width: 480px;
+  padding: 12px 18px;
+  background-color: #202124;
+  color: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px 0 rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15);
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+  animation: toastFadeIn 0.25s cubic-bezier(0, 0, 0.2, 1);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+@keyframes toastFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toast-message {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 400;
+  color: #ffffff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toast-action-btn {
+  border: none;
+  background: transparent;
+  color: #8ab4f8;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  text-transform: capitalize;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.toast-action-btn:hover {
+  background-color: rgba(138, 180, 248, 0.12);
+  color: #aecbfa;
+}
+
+.toast-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: #9aa0a6;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 50%;
+  padding: 0;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.toast-close-btn:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+@media (max-width: 600px) {
+  .toast-snackbar {
+    left: 12px;
+    right: 12px;
+    bottom: 16px;
+    min-width: 0;
+    max-width: none;
+  }
+}
+

@@ -7,7 +7,7 @@ const Email = require('../models/Email');
 const User = require('../models/User');
 const { classifyIncoming, rememberSenderDecision } = require('../services/spamService');
 const { RETENTION_DAYS } = require('../services/cleanupService');
-const { removeUnreferencedAttachments } = require('../services/attachmentStorage');
+const { removeUnreferencedAttachments, STORAGE_NAME_PATTERN } = require('../services/attachmentStorage');
 
 // ==========================================
 // 1. HELPER FUNCTIONS
@@ -17,22 +17,46 @@ const { removeUnreferencedAttachments } = require('../services/attachmentStorage
  * Enriches a list of email objects with the sender's display first name.
  */
 async function addSenderNames(emails) {
-  const participantEmails = [...new Set(emails.flatMap(email => [email.sender, email.receiver]).filter(Boolean))];
+  const allAddresses = emails.flatMap(email => {
+    const list = [email.sender];
+    if (email.receiver) {
+      email.receiver.split(',').forEach(r => list.push(r.trim().toLowerCase()));
+    }
+    return list;
+  }).filter(Boolean);
+
+  const participantEmails = [...new Set(allAddresses)];
   const participants = await User.find({ email: { $in: participantEmails } }, 'email firstName lastName').lean();
   const participantNames = new Map(participants.map(user => [
-    user.email,
+    user.email.toLowerCase(),
     {
       firstName: user.firstName,
       displayName: `${user.firstName} ${user.lastName || ''}`.trim()
     }
   ]));
 
-  return emails.map(email => ({
-    ...email,
-    firstName: participantNames.get(email.sender)?.firstName || null,
-    senderName: participantNames.get(email.sender)?.displayName || null,
-    receiverName: participantNames.get(email.receiver)?.displayName || null
-  }));
+  return emails.map(email => {
+    const receiverList = (email.receiver || '').split(',').map(r => r.trim()).filter(Boolean);
+    const receiverDisplayNames = receiverList.map(r => {
+      const u = participantNames.get(r.toLowerCase());
+      return u?.displayName || u?.firstName || r.split('@')[0];
+    });
+
+    const receiverFirstNames = receiverList.map(r => {
+      const u = participantNames.get(r.toLowerCase());
+      return u?.firstName || (u?.displayName ? u.displayName.split(' ')[0] : null) || r.split('@')[0];
+    });
+
+    return {
+      ...email,
+      firstName: participantNames.get(email.sender?.toLowerCase())?.firstName || null,
+      senderName: participantNames.get(email.sender?.toLowerCase())?.displayName || null,
+      receiverName: receiverDisplayNames.length > 0 ? receiverDisplayNames.join(', ') : null,
+      receiverFirstName: receiverFirstNames[0] || null,
+      receiverFirstNames,
+      receiverNamesList: receiverDisplayNames
+    };
+  });
 }
 
 /**
@@ -97,7 +121,34 @@ async function createEmail(req, res) {
       if (!draft) {
         return res.status(404).json({ message: 'The draft with these attachments could not be found.' });
       }
-      attachments = draft.attachments;
+      attachments = draft.attachments || [];
+    }
+
+    if (attachments.length === 0 && Array.isArray(req.body.attachments) && req.body.attachments.length > 0) {
+      attachments = req.body.attachments.filter(att =>
+        att &&
+        typeof att.filename === 'string' &&
+        typeof att.mimeType === 'string' &&
+        typeof att.size === 'number' &&
+        typeof att.storageName === 'string' &&
+        STORAGE_NAME_PATTERN.test(att.storageName)
+      ).map(att => ({
+        filename: att.filename.trim().slice(0, 255) || 'attachment',
+        mimeType: att.mimeType,
+        size: Math.max(0, att.size),
+        storageName: att.storageName
+      }));
+    }
+
+    let conversationThreadId = null;
+    let sendGroupId = null;
+    if (req.body.threadId && mongoose.isValidObjectId(req.body.threadId)) {
+      conversationThreadId = new mongoose.Types.ObjectId(req.body.threadId);
+    } else if (!draftMode) {
+      conversationThreadId = new mongoose.Types.ObjectId();
+    }
+    if (!draftMode) {
+      sendGroupId = new mongoose.Types.ObjectId().toString();
     }
 
     const emailData = {
@@ -106,43 +157,61 @@ async function createEmail(req, res) {
       subject: subject || '(No Subject)',
       body: body || '',
       isDraft: draftMode,
-      attachments
+      attachments,
+      threadId: conversationThreadId,
+      sendGroupId,
+      inReplyTo: (req.body.inReplyTo && mongoose.isValidObjectId(req.body.inReplyTo))
+        ? new mongoose.Types.ObjectId(req.body.inReplyTo)
+        : null
     };
 
     let savedEmail;
 
-    if (draftMode || normalizedSender === normalizedReceiver) {
-      // Single copy for drafts or self-sent emails
+    if (draftMode) {
+      // Single copy for drafts
       savedEmail = await new Email({
         ...emailData,
         owner: normalizedSender,
         isRead: false
       }).save();
     } else {
-      // Two copies: one for sender's Sent box, one for recipient's Inbox
+      // 2. Copies for all recipients in their Inbox
+      const recipientsList = [...new Set(
+        normalizedReceiver.split(',').map(r => r.trim().toLowerCase()).filter(Boolean)
+      )];
+
+      const isSelfSent = recipientsList.includes(normalizedSender);
+
+      // 1. Copy for sender's Sent box (and Inbox if sent to self)
       savedEmail = await new Email({
         ...emailData,
         owner: normalizedSender,
-        isRead: true
+        isRead: !isSelfSent // If sent to oneself, arrives unread
       }).save();
 
-      // Run spam detection on the recipient's copy only
-      const verdict = await classifyIncoming({
-        owner: normalizedReceiver,
-        sender: normalizedSender,
-        subject: emailData.subject,
-        body: emailData.body
-      });
+      for (const recip of recipientsList) {
+        if (recip === normalizedSender) {
+          // Sender's copy is already saved above; skip to avoid duplicate
+          continue;
+        }
 
-      await new Email({
-        ...emailData,
-        owner: normalizedReceiver,
-        isRead: false,
-        isSpam: verdict.isSpam,
-        spamAt: verdict.isSpam ? new Date() : null,
-        spamScore: verdict.score,
-        spamReasons: verdict.isSpam ? verdict.reasons : []
-      }).save();
+        const verdict = await classifyIncoming({
+          owner: recip,
+          sender: normalizedSender,
+          subject: emailData.subject,
+          body: emailData.body
+        });
+
+        await new Email({
+          ...emailData,
+          owner: recip,
+          isRead: false,
+          isSpam: verdict.isSpam,
+          spamAt: verdict.isSpam ? new Date() : null,
+          spamScore: verdict.score,
+          spamReasons: verdict.isSpam ? verdict.reasons : []
+        }).save();
+      }
     }
 
     return res.status(201).json({
@@ -228,7 +297,7 @@ async function getEmails(req, res) {
 
     switch (folder) {
       case 'inbox':
-        filter.receiver = queryEmail;
+        filter.receiver = new RegExp(`(^|,\\s*)${queryEmail.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}($|,\\s*)`, 'i');
         filter.isTrash = false;
         filter.isDraft = false;
         filter.isSpam = { $ne: true };
@@ -266,7 +335,18 @@ async function getEmails(req, res) {
     }
 
     const emails = await Email.find(filter).sort({ timestamp: -1 }).lean();
-    return res.status(200).json(addExpiryInfo(await addSenderNames(emails), folder));
+    const seenEmails = new Set();
+    const uniqueEmails = [];
+    for (const em of emails) {
+      const timeMs = new Date(em.timestamp).getTime();
+      const roundedTime = Math.floor(timeMs / 3000);
+      const sig = `${em.sender}|${em.owner}|${em.subject}|${em.body}|${roundedTime}`;
+      if (!seenEmails.has(sig)) {
+        seenEmails.add(sig);
+        uniqueEmails.push(em);
+      }
+    }
+    return res.status(200).json(addExpiryInfo(await addSenderNames(uniqueEmails), folder));
   } catch (err) {
     console.error('Fetch emails error:', err);
     return res.status(500).json({ message: 'Internal server error while fetching emails' });
@@ -633,9 +713,196 @@ async function getFolderCounts(req, res) {
   }
 }
 
+/**
+ * GET /api/emails/:id/thread
+ * Fetches all emails belonging to the conversation thread of the specified email.
+ */
+async function getEmailThread(req, res) {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ message: 'Invalid email ID' });
+    }
+
+    const baseEmail = await Email.findOne({ _id: id, owner: req.user.email }).lean();
+    if (!baseEmail) {
+      return res.status(404).json({ message: 'Email not found' });
+    }
+
+    let threadEmails = [];
+
+    if (baseEmail.threadId) {
+      // Find all emails for this user belonging to the same threadId
+      threadEmails = await Email.find({
+        owner: req.user.email,
+        threadId: baseEmail.threadId
+      })
+      .sort({ timestamp: 1 })
+      .lean();
+    } else {
+      // Fallback ONLY for legacy emails created before threadId existed:
+      // Group by normalized subject and participants (ignoring No Subject)
+      const cleanSubject = (baseEmail.subject || '')
+        .replace(/^(re:\s*|fwd:\s*)+/ig, '')
+        .trim();
+
+      const isNoSubject = !cleanSubject ||
+        cleanSubject.toLowerCase() === '(no subject)' ||
+        cleanSubject.toLowerCase() === 'no subject';
+
+      if (!isNoSubject) {
+        const subjectRegex = new RegExp(`^(re:\\s*|fwd:\\s*)*${cleanSubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+        const participants = [baseEmail.sender, baseEmail.receiver].filter(Boolean);
+        const legacyMatches = await Email.find({
+          owner: req.user.email,
+          threadId: null,
+          subject: subjectRegex,
+          $or: [
+            { sender: { $in: participants } },
+            { receiver: { $in: participants } }
+          ]
+        })
+        .sort({ timestamp: 1 })
+        .lean();
+
+        if (legacyMatches && legacyMatches.length > 0) {
+          threadEmails = legacyMatches;
+        }
+      }
+    }
+
+    if (threadEmails.length === 0) {
+      threadEmails = [baseEmail];
+    }
+
+    const enrichedThread = await addSenderNames(threadEmails);
+
+    const seenSigs = new Set();
+    const uniqueThread = [];
+    for (const email of enrichedThread) {
+      const timeMs = new Date(email.timestamp).getTime();
+      const roundedTime = Math.floor(timeMs / 3000);
+      const sig = `${email.sender}|${email.owner}|${email.subject}|${email.body}|${roundedTime}`;
+      if (!seenSigs.has(sig)) {
+        seenSigs.add(sig);
+        uniqueThread.push(email);
+      }
+    }
+
+    return res.status(200).json({
+      threadId: baseEmail.threadId || (uniqueThread[0] ? uniqueThread[0]._id : baseEmail._id),
+      count: uniqueThread.length,
+      emails: uniqueThread
+    });
+  } catch (err) {
+    console.error('Get email thread error:', err);
+    return res.status(500).json({ message: 'Internal server error while retrieving conversation thread' });
+  }
+}
+
+/**
+ * POST /api/emails/:id/undo-send
+ * Cancels a sent email within a short time window (e.g. 35s max server margin).
+ * Deletes all recipient copies created during this send, and reverts the sender's copy back to draft.
+ */
+async function undoSendEmail(req, res) {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ message: 'Invalid email ID' });
+    }
+
+    const email = await Email.findOne({
+      _id: id,
+      owner: req.user.email,
+      sender: req.user.email,
+      isDraft: false
+    });
+
+    if (!email) {
+      return res.status(404).json({ message: 'Sent email not found or already recalled.' });
+    }
+
+    // Allow undo within 35 seconds of sending
+    const elapsedSeconds = (Date.now() - new Date(email.timestamp).getTime()) / 1000;
+    if (elapsedSeconds > 35) {
+      return res.status(400).json({ message: 'Undo window has expired.' });
+    }
+
+    // Delete recipient copies associated with this send
+    if (email.sendGroupId) {
+      await Email.deleteMany({
+        sendGroupId: email.sendGroupId,
+        owner: { $ne: req.user.email }
+      });
+    } else {
+      // Fallback matching sender, subject, and timestamp within 5 seconds
+      const timeMin = new Date(new Date(email.timestamp).getTime() - 5000);
+      const timeMax = new Date(new Date(email.timestamp).getTime() + 5000);
+      await Email.deleteMany({
+        sender: email.sender,
+        owner: { $ne: req.user.email },
+        subject: email.subject,
+        timestamp: { $gte: timeMin, $lte: timeMax }
+      });
+    }
+
+    // Revert sender copy to draft
+    email.isDraft = true;
+    email.timestamp = new Date();
+    await email.save();
+
+    return res.status(200).json({
+      message: 'Sending undone. Email converted back to draft.',
+      email
+    });
+  } catch (err) {
+    console.error('Undo send email error:', err);
+    return res.status(500).json({ message: 'Internal server error while undoing email send.' });
+  }
+}
+
+/**
+ * GET /api/emails/:id
+ * Fetches a single email by ID for the authorized owner, sender, or receiver.
+ */
+async function getEmailById(req, res) {
+  try {
+    const { id } = req.params;
+    const userEmail = (req.user?.email || req.query.email || '').toLowerCase();
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ message: 'Invalid email ID' });
+    }
+
+    const email = await Email.findById(id).lean();
+    if (!email) {
+      return res.status(404).json({ message: 'Email not found' });
+    }
+
+    // Access check: User must be owner, sender, or receiver
+    const isOwner = email.owner && email.owner.toLowerCase() === userEmail;
+    const isSender = email.sender && email.sender.toLowerCase() === userEmail;
+    const isReceiver = email.receiver && email.receiver.toLowerCase().includes(userEmail);
+
+    if (!isOwner && !isSender && !isReceiver) {
+      return res.status(403).json({ message: 'Forbidden: Access denied' });
+    }
+
+    const [enriched] = await addSenderNames([email]);
+    const withExpiry = addExpiryInfo([enriched], email.isTrash ? 'bin' : email.isSpam ? 'spam' : 'inbox')[0];
+
+    return res.status(200).json(withExpiry);
+  } catch (err) {
+    console.error('Get email by ID error:', err);
+    return res.status(500).json({ message: 'Internal server error while fetching email' });
+  }
+}
+
 module.exports = {
   createEmail,
   getEmails,
+  getEmailById,
   getStarredEmails,
   starEmail,
   unstarEmail,
@@ -646,5 +913,7 @@ module.exports = {
   reportSpam,
   markNotSpam,
   emptyFolder,
-  getFolderCounts
+  getFolderCounts,
+  getEmailThread,
+  undoSendEmail
 };
