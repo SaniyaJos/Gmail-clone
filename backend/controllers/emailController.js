@@ -7,6 +7,7 @@ const Email = require('../models/Email');
 const User = require('../models/User');
 const { classifyIncoming, rememberSenderDecision } = require('../services/spamService');
 const { RETENTION_DAYS } = require('../services/cleanupService');
+const { removeUnreferencedAttachments } = require('../services/attachmentStorage');
 
 // ==========================================
 // 1. HELPER FUNCTIONS
@@ -16,13 +17,21 @@ const { RETENTION_DAYS } = require('../services/cleanupService');
  * Enriches a list of email objects with the sender's display first name.
  */
 async function addSenderNames(emails) {
-  const senderEmails = [...new Set(emails.map(email => email.sender))];
-  const senders = await User.find({ email: { $in: senderEmails } }, 'email firstName').lean();
-  const senderNames = new Map(senders.map(user => [user.email, user.firstName]));
+  const participantEmails = [...new Set(emails.flatMap(email => [email.sender, email.receiver]).filter(Boolean))];
+  const participants = await User.find({ email: { $in: participantEmails } }, 'email firstName lastName').lean();
+  const participantNames = new Map(participants.map(user => [
+    user.email,
+    {
+      firstName: user.firstName,
+      displayName: `${user.firstName} ${user.lastName || ''}`.trim()
+    }
+  ]));
 
   return emails.map(email => ({
     ...email,
-    firstName: senderNames.get(email.sender) || null
+    firstName: participantNames.get(email.sender)?.firstName || null,
+    senderName: participantNames.get(email.sender)?.displayName || null,
+    receiverName: participantNames.get(email.receiver)?.displayName || null
   }));
 }
 
@@ -55,48 +64,79 @@ function addExpiryInfo(emails, folder) {
 async function createEmail(req, res) {
   try {
     const { sender, receiver, subject, body, isDraft } = req.body;
+    const draftMode = isDraft === true;
 
     // Drafts may be saved without a receiver; real emails need one
-    if (!sender || (!receiver && !isDraft)) {
+    if (typeof sender !== 'string' || !sender.trim() ||
+        (receiver !== undefined && receiver !== null && typeof receiver !== 'string') ||
+        (!receiver?.trim() && !draftMode)) {
       return res.status(400).json({ message: 'Sender and Receiver are required' });
+    }
+    if ((subject !== undefined && typeof subject !== 'string') ||
+        (body !== undefined && typeof body !== 'string')) {
+      return res.status(400).json({ message: 'Subject and body must be text values.' });
+    }
+
+    const normalizedSender = sender.trim().toLowerCase();
+    const normalizedReceiver = (receiver || '').trim().toLowerCase();
+    if (normalizedSender !== req.user.email) {
+      return res.status(403).json({ message: 'You can only send or save mail as your signed-in account.' });
+    }
+
+    let attachments = [];
+    if (!draftMode && req.body.draftId) {
+      if (!mongoose.isValidObjectId(req.body.draftId)) {
+        return res.status(400).json({ message: 'Invalid draft ID' });
+      }
+      const draft = await Email.findOne({
+        _id: req.body.draftId,
+        owner: req.user.email,
+        sender: req.user.email,
+        isDraft: true
+      });
+      if (!draft) {
+        return res.status(404).json({ message: 'The draft with these attachments could not be found.' });
+      }
+      attachments = draft.attachments;
     }
 
     const emailData = {
-      sender,
-      receiver: receiver || '',
+      sender: normalizedSender,
+      receiver: normalizedReceiver,
       subject: subject || '(No Subject)',
       body: body || '',
-      isDraft: Boolean(isDraft)
+      isDraft: draftMode,
+      attachments
     };
 
     let savedEmail;
 
-    if (isDraft || sender.toLowerCase() === receiver.toLowerCase()) {
+    if (draftMode || normalizedSender === normalizedReceiver) {
       // Single copy for drafts or self-sent emails
       savedEmail = await new Email({
         ...emailData,
-        owner: sender.toLowerCase(),
+        owner: normalizedSender,
         isRead: false
       }).save();
     } else {
       // Two copies: one for sender's Sent box, one for recipient's Inbox
       savedEmail = await new Email({
         ...emailData,
-        owner: sender.toLowerCase(),
+        owner: normalizedSender,
         isRead: true
       }).save();
 
       // Run spam detection on the recipient's copy only
       const verdict = await classifyIncoming({
-        owner: receiver,
-        sender,
+        owner: normalizedReceiver,
+        sender: normalizedSender,
         subject: emailData.subject,
         body: emailData.body
       });
 
       await new Email({
         ...emailData,
-        owner: receiver.toLowerCase(),
+        owner: normalizedReceiver,
         isRead: false,
         isSpam: verdict.isSpam,
         spamAt: verdict.isSpam ? new Date() : null,
@@ -106,7 +146,7 @@ async function createEmail(req, res) {
     }
 
     return res.status(201).json({
-      message: isDraft ? 'Draft saved successfully' : 'Email sent successfully',
+      message: draftMode ? 'Draft saved successfully' : 'Email sent successfully',
       email: savedEmail
     });
   } catch (err) {
@@ -393,7 +433,7 @@ async function updateDraft(req, res) {
 
     // Only documents that are still drafts can be edited this way
     const draft = await Email.findOneAndUpdate(
-      { _id: id, isDraft: true },
+      { _id: id, owner: req.user.email, sender: req.user.email, isDraft: true },
       {
         receiver: receiver || '',
         subject: subject || '(No Subject)',
@@ -435,6 +475,7 @@ async function deleteEmail(req, res) {
     if (!email) {
       return res.status(404).json({ message: 'Email not found' });
     }
+    await removeUnreferencedAttachments(email.attachments.map(attachment => attachment.storageName));
 
     return res.status(200).json({ message: 'Email permanently deleted' });
   } catch (err) {
@@ -552,7 +593,11 @@ async function emptyFolder(req, res) {
       return res.status(400).json({ message: 'Only the bin and spam folders can be emptied' });
     }
 
+    const emails = await Email.find(filter).select('attachments.storageName').lean();
     const result = await Email.deleteMany(filter);
+    await removeUnreferencedAttachments(
+      emails.flatMap(email => (email.attachments || []).map(attachment => attachment.storageName))
+    );
     return res.status(200).json({
       message: `Permanently deleted ${result.deletedCount} email(s)`,
       deletedCount: result.deletedCount

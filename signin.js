@@ -122,17 +122,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (err) {
       console.error('Error connecting to backend:', err);
-
-      // Offline simulation fallback for testing
-      alert(`Database/Server Connection Offline!\n\nSimulated Login:\nEmail: ${formattedEmail}\n\n(Ensure your backend server is running to sign in dynamically)`);
-
-      localStorage.setItem('currentUser', JSON.stringify({
-        firstName: 'Test',
-        lastName: 'User',
-        email: formattedEmail
-      }));
-
-      window.location.href = 'inbox.html';
+      alert('Could not reach the backend. Start the backend server and try signing in again.');
+      submitBtn.textContent = 'Next';
+      submitBtn.disabled = false;
     }
   });
 

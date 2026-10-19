@@ -6,6 +6,8 @@
  * Enforces that users can only analyze their own emails and access/modify their own tasks.
  */
 
+const jwt = require('jsonwebtoken');
+
 function requireAuth(req, res, next) {
   const userEmail = 
     req.headers['x-user-email'] ||
@@ -27,6 +29,34 @@ function requireAuth(req, res, next) {
   next();
 }
 
+function requireTokenAuth(req, res, next) {
+  const authorization = req.headers.authorization || '';
+  const tokenMatch = authorization.match(/^Bearer\s+(.+)$/i);
+
+  if (!tokenMatch) {
+    return res.status(401).json({ message: 'A valid sign-in token is required' });
+  }
+
+  try {
+    const payload = jwt.verify(tokenMatch[1], process.env.JWT_SECRET, {
+      algorithms: ['HS256'],
+      issuer: 'inboxflow'
+    });
+    if (!payload || typeof payload !== 'object' || typeof payload.email !== 'string') {
+      return res.status(401).json({ message: 'Invalid sign-in token' });
+    }
+
+    req.user = { email: payload.email.trim().toLowerCase() };
+    next();
+  } catch (err) {
+    if (err.name === 'TokenExpiredError' || err.name === 'JsonWebTokenError') {
+      return res.status(401).json({ message: 'Your sign-in token is invalid or expired. Please sign in again.' });
+    }
+    return next(err);
+  }
+}
+
 module.exports = {
-  requireAuth
+  requireAuth,
+  requireTokenAuth
 };

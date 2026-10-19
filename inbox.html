@@ -284,11 +284,28 @@
                 </div>
                 <div class="receiver-row">
                   <span class="receiver-email" id="details-receiver-email"></span>
+                  <button class="email-info-toggle" id="email-info-toggle" type="button"
+                    aria-expanded="false" aria-controls="email-info-panel" title="Show message details">
+                    <span aria-hidden="true">▾</span>
+                  </button>
                 </div>
               </div>
               <span class="details-time" id="details-timestamp"></span>
             </div>
+            <section class="email-info-panel" id="email-info-panel" hidden aria-label="Message details">
+              <dl>
+                <div><dt>From</dt><dd id="email-info-from"></dd></div>
+                <div><dt>To</dt><dd id="email-info-to"></dd></div>
+                <div><dt>Date</dt><dd id="email-info-date"></dd></div>
+                <div><dt>Subject</dt><dd id="email-info-subject"></dd></div>
+                <div><dt>Security</dt><dd id="email-info-security">No transport-security or authentication details are recorded for this message.</dd></div>
+              </dl>
+            </section>
             <div class="details-content" id="details-content"></div>
+            <section class="email-attachments" id="email-attachments" aria-label="Email attachments" hidden>
+              <h3>Attachments</h3>
+              <div class="email-attachments-list" id="email-attachments-list"></div>
+            </section>
 
             <!-- Inline Extracted Actions Section in Email View -->
             <div class="email-tasks-section" id="email-tasks-section" style="display: none;">
@@ -333,8 +350,14 @@
         <div class="compose-body-group">
           <textarea id="email-body" placeholder="Write email body here..."></textarea>
         </div>
+        <div class="compose-attachments" id="compose-attachments" aria-live="polite"></div>
         <div class="modal-footer">
           <div class="footer-left">
+            <button class="compose-attach-button" id="compose-attach" type="button" title="Attach files" aria-label="Attach files">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.5 6.5 8.7 14.3a2.5 2.5 0 0 0 3.5 3.5l8-8a4.5 4.5 0 0 0-6.4-6.4l-8.5 8.5a6 6 0 0 0 8.5 8.5l7-7"/></svg>
+            </button>
+            <input id="compose-file-input" type="file" multiple hidden
+              accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.csv,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx">
             <button type="button" class="btn-send" id="btn-send-email">Send</button>
           </div>
           <div class="footer-right">

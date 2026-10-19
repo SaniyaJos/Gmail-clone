@@ -9,6 +9,7 @@
  */
 
 const Email = require('../models/Email');
+const { removeUnreferencedAttachments } = require('./attachmentStorage');
 
 const RETENTION_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -32,6 +33,12 @@ async function purgeExpiredEmails(now = new Date()) {
   await Email.updateMany({ isSpam: true, spamAt: null }, { $set: { spamAt: now } });
 
   const cutoff = getCutoffDate(now);
+  const expiredEmails = await Email.find({
+    $or: [
+      { isTrash: true, trashedAt: { $lte: cutoff } },
+      { isSpam: true, spamAt: { $lte: cutoff } }
+    ]
+  }).select('attachments.storageName').lean();
   const result = await Email.deleteMany({
     $or: [
       { isTrash: true, trashedAt: { $lte: cutoff } },
@@ -39,6 +46,9 @@ async function purgeExpiredEmails(now = new Date()) {
     ]
   });
 
+  await removeUnreferencedAttachments(
+    expiredEmails.flatMap(email => (email.attachments || []).map(attachment => attachment.storageName))
+  );
   return result.deletedCount || 0;
 }
 
