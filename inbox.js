@@ -92,6 +92,15 @@ document.addEventListener('DOMContentLoaded', () => {
   let attachmentRenderSequence = 0;
   let attachmentObjectUrls = [];
 
+  // Conversation Threading State
+  let currentThreadEmails = [];
+  let currentThreadActiveEmails = [];
+  let currentThreadDeletedEmails = [];
+  let currentMainEmail = null;
+  let currentConversationThreadId = null;
+  let activeThreadId = null;
+  let activeInReplyTo = null;
+
   // Bin & Spam keep emails for this many days before the backend deletes them automatically.
   // (Must match RETENTION_DAYS in backend/services/cleanupService.js)
   const RETENTION_DAYS = 30;
@@ -158,6 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Compose Modal Elements
   const composeBtn = document.getElementById('btn-compose');
   const composeModal = document.getElementById('compose-modal');
+  const composeModalTitle = composeModal ? composeModal.querySelector('.modal-title') : null;
   const composeForm = document.getElementById('compose-form');
   const composeCloseBtn = document.getElementById('compose-close');
   const composeMinimizeBtn = document.getElementById('compose-minimize');
@@ -178,11 +188,26 @@ document.addEventListener('DOMContentLoaded', () => {
   const detailsActionDelete = document.getElementById('details-action-delete');
   const detailsActionSpam = document.getElementById('details-action-spam');
   const detailsActionNotSpam = document.getElementById('details-action-not-spam');
+  const replyForwardBar = document.getElementById('details-reply-forward-bar');
+  const btnDetailReply = document.getElementById('btn-detail-reply');
+  const btnDetailReplyAll = document.getElementById('btn-detail-reply-all');
+  const btnDetailForward = document.getElementById('btn-detail-forward');
+  const btnHeaderStar = document.getElementById('btn-header-star');
+  const btnHeaderReply = document.getElementById('btn-header-reply');
+  const btnHeaderForward = document.getElementById('btn-header-forward');
+  const btnHeaderDelete = document.getElementById('btn-header-delete');
+  const threadDeletedBanner = document.getElementById('thread-deleted-banner');
+  const threadDeletedText = document.getElementById('thread-deleted-text');
+  const btnViewDeletedMsg = document.getElementById('btn-view-deleted-msg');
+  const btnDeleteForeverMsg = document.getElementById('btn-delete-forever-msg');
+  const threadDeletedMessages = document.getElementById('thread-deleted-messages');
+  const threadOlderMessages = document.getElementById('thread-older-messages');
   const spamWarning = document.getElementById('spam-warning');
   const spamWarningReasons = document.getElementById('spam-warning-reasons');
   const detailsStarButton = document.getElementById('details-star-button');
   const detailsStarIcon = detailsStarButton.querySelector('.details-star-icon');
   const detailsSubject = document.getElementById('details-subject');
+  const detailsSenderInfo = document.getElementById('details-sender-info');
   const detailsSenderAvatar = document.getElementById('details-sender-avatar');
   const detailsSenderName = document.getElementById('details-sender-name');
   const detailsSenderEmail = document.getElementById('details-sender-email');
@@ -384,11 +409,108 @@ document.addEventListener('DOMContentLoaded', () => {
     folderBanner.style.display = 'flex';
   }
 
-  function renderEmailList(emails) {
+  // Group individual emails into conversation threads (Gmail-style conversation view)
+  function groupEmailsByThread(emails) {
+    if (activeFolder === 'drafts') return emails;
+
+    const threadsMap = new Map();
+    const threadOrder = [];
+
+    emails.forEach(email => {
+      const rawSubj = (email.subject || '').trim();
+      const cleanSubj = rawSubj.replace(/^(re:\s*|fwd:\s*)+/ig, '').trim().toLowerCase();
+      const isNoSubject = !cleanSubj || cleanSubj === '(no subject)' || cleanSubj === 'no subject';
+      // Use threadId if present, else fallback to clean subject for legacy emails (never group No Subject)
+      const threadKey = email.threadId
+        ? String(email.threadId)
+        : (!isNoSubject ? `subj_${cleanSubj}` : String(email._id));
+
+      if (!threadsMap.has(threadKey)) {
+        threadsMap.set(threadKey, []);
+        threadOrder.push(threadKey);
+      }
+      threadsMap.get(threadKey).push(email);
+    });
+
+    return threadOrder.map(threadKey => {
+      const rawThreadList = threadsMap.get(threadKey);
+      // Sort chronological: oldest to newest
+      rawThreadList.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+      // Filter out duplicate identical self-sent copies
+      const seenSig = new Set();
+      const threadList = [];
+      for (const e of rawThreadList) {
+        const timeMs = new Date(e.timestamp).getTime();
+        const roundedTime = Math.floor(timeMs / 3000);
+        const sig = `${e.sender}|${e.subject}|${e.body}|${roundedTime}`;
+        if (!seenSig.has(sig)) {
+          seenSig.add(sig);
+          threadList.push(e);
+        }
+      }
+
+      // Latest message in thread represents the thread entry in the list
+      const latest = threadList[threadList.length - 1];
+      const hasUnread = threadList.some(e => !e.isRead && !e.isDraft);
+      const hasStarred = threadList.some(e => e.isStarred);
+
+      // Collect sender names across conversation
+      const participantNames = [];
+      threadList.forEach(e => {
+        const isMe = e.sender && e.sender.toLowerCase() === userEmail.toLowerCase();
+        const name = isMe
+          ? 'me'
+          : (e.senderName || e.firstName || (e.sender ? e.sender.split('@')[0] : 'Unknown'));
+        if (!participantNames.includes(name)) {
+          participantNames.push(name);
+        }
+      });
+
+      let displaySenderHtml = escapeHtml(participantNames.join(', '));
+      if (threadList.length > 1) {
+        displaySenderHtml += ` <span class="email-thread-count">${threadList.length}</span>`;
+      }
+
+      // Clean subject
+      const origSubj = latest.subject === '(No Subject)' ? '' : (latest.subject || '');
+      const cleanSubject = origSubj.replace(/^(re:\s*|fwd:\s*)+/ig, '').trim() || origSubj || '(No Subject)';
+
+      // Clean snippet: exclude quoted replies and header lines
+      const bodyLines = (latest.body || '').split('\n');
+      const cleanLines = [];
+      for (const rawLine of bodyLines) {
+        const line = rawLine.trim();
+        if (/^on .+ wrote:$/i.test(line)) break;
+        if (/^-+\s*original message\s*-+/i.test(line)) break;
+        if (/^-+\s*forwarded message\s*-+/i.test(line)) break;
+        if (line.startsWith('>')) continue;
+        if (line) cleanLines.push(line);
+      }
+      const cleanSnippet = cleanLines.join(' ').replace(/\s+/g, ' ').trim() || latest.body || '';
+
+      return {
+        ...latest,
+        displaySenderHtml,
+        displaySubject: cleanSubject,
+        displaySnippet: cleanSnippet.slice(0, 100),
+        isRead: !hasUnread,
+        isStarred: hasStarred,
+        threadCount: threadList.length,
+        threadEmailIds: threadList.map(e => e._id),
+        threadEmails: threadList
+      };
+    });
+  }
+
+  function renderEmailList(rawEmails) {
     emailListUl.innerHTML = '';
 
+    // Group into conversation threads (Gmail-style)
+    const emails = groupEmailsByThread(rawEmails);
+
     // Update Badge counts for Inbox and Drafts
-    if (!activeSearchQuery) updateFolderBadges(emails);
+    if (!activeSearchQuery) updateFolderBadges(rawEmails);
     updateFolderBanner(emails.length);
 
     if (emails.length === 0) {
@@ -409,11 +531,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const formattedDate = formatTimestamp(email.timestamp);
 
       // Determine sender display: if user is sender, display receiver email
-      let displaySender = email.sender === userEmail
-        ? `To: ${escapeHtml(email.receiver)}`
-        : escapeHtml(email.firstName || email.sender.split('@')[0]);
+      let displaySender;
       if (email.isDraft) {
         displaySender = '<span class="draft-label">Draft</span>';
+      } else if (email.displaySenderHtml) {
+        displaySender = email.displaySenderHtml;
+      } else {
+        displaySender = email.sender === userEmail
+          ? `To: ${escapeHtml(email.receiver)}`
+          : escapeHtml(email.firstName || email.sender.split('@')[0]);
       }
 
       // Star control (hidden when in Bin or Spam)
@@ -469,8 +595,8 @@ document.addEventListener('DOMContentLoaded', () => {
         ${starControl}
         <div class="email-sender">${displaySender}</div>
         <div class="email-content">
-          <span class="email-subject">${escapeHtml(email.subject)}</span>
-          <span class="email-snippet">— ${escapeHtml(email.body.substring(0, 80))}</span>
+          <span class="email-subject">${escapeHtml(email.displaySubject || email.subject)}</span>
+          <span class="email-snippet">— ${escapeHtml(email.displaySnippet !== undefined ? email.displaySnippet : email.body.substring(0, 80))}</span>
           ${expiryHtml}
         </div>
         <div class="email-date">${formattedDate}</div>
@@ -494,15 +620,13 @@ document.addEventListener('DOMContentLoaded', () => {
           star.classList.toggle('starred', nextState);
           star.setAttribute('aria-label', nextState ? 'Unstar email' : 'Star email');
 
-          const result = await updateEmailStatus(email._id, { isStarred: nextState });
-          if (!result || !result.email) {
-            email.isStarred = previousState;
-            star.classList.toggle('starred', previousState);
-            star.setAttribute('aria-label', previousState ? 'Unstar email' : 'Star email');
-            return;
-          }
+          const targetIds = (email.threadEmailIds && email.threadEmailIds.length > 0)
+            ? email.threadEmailIds
+            : [email._id];
 
-          email.isStarred = result.email.isStarred;
+          for (const id of targetIds) {
+            await updateEmailStatus(id, { isStarred: nextState });
+          }
           fetchEmails(activeFolder);
         };
 
@@ -514,10 +638,20 @@ document.addEventListener('DOMContentLoaded', () => {
       const cb = li.querySelector('.email-row-select');
       cb.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (cb.checked) {
-          selectedEmailIds.add(cb.getAttribute('data-id'));
+        let targetIds;
+        if (activeFolder === 'sent') {
+          const sentEmails = (email.threadEmails || []).filter(m => (m.sender || '').toLowerCase() === userEmail.toLowerCase());
+          targetIds = sentEmails.length > 0 ? sentEmails.map(m => m._id) : [cb.getAttribute('data-id')];
         } else {
-          selectedEmailIds.delete(cb.getAttribute('data-id'));
+          targetIds = (email.threadEmailIds && email.threadEmailIds.length > 0)
+            ? email.threadEmailIds
+            : [cb.getAttribute('data-id')];
+        }
+
+        if (cb.checked) {
+          targetIds.forEach(id => selectedEmailIds.add(String(id)));
+        } else {
+          targetIds.forEach(id => selectedEmailIds.delete(String(id)));
         }
         updateDeleteButtonState();
       });
@@ -526,14 +660,27 @@ document.addEventListener('DOMContentLoaded', () => {
       const deleteBtn = li.querySelector('.btn-row-delete');
       deleteBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        const targetId = deleteBtn.getAttribute('data-id');
+        let targetIds;
+        if (activeFolder === 'sent') {
+          const sentEmails = (email.threadEmails || []).filter(m => (m.sender || '').toLowerCase() === userEmail.toLowerCase());
+          targetIds = sentEmails.length > 0 ? sentEmails.map(m => m._id) : [deleteBtn.getAttribute('data-id')];
+        } else {
+          targetIds = (email.threadEmailIds && email.threadEmailIds.length > 0)
+            ? email.threadEmailIds
+            : [deleteBtn.getAttribute('data-id')];
+        }
+
         if (isPermanentDeleteFolder()) {
           if (confirm('Permanently delete this email?')) {
-            await deleteEmailPermanently(targetId);
+            for (const id of targetIds) {
+              await deleteEmailPermanently(id);
+            }
             fetchEmails(activeFolder);
           }
         } else {
-          await updateEmailStatus(targetId, { isTrash: true });
+          for (const id of targetIds) {
+            await updateEmailStatus(id, { isTrash: true });
+          }
           fetchEmails(activeFolder);
         }
       });
@@ -599,6 +746,15 @@ document.addEventListener('DOMContentLoaded', () => {
     detailsActionDelete.title = inBin ? 'Permanently delete' : inSpam ? 'Delete forever' : 'Move to Bin';
     detailsStarButton.style.display = (inBin || inSpam) ? 'none' : 'inline-flex';
 
+    // Show/hide Reply & Forward buttons (disabled in Bin, Spam, or Drafts)
+    const canReplyOrForward = !inBin && !inSpam && !email.isDraft;
+    if (replyForwardBar) {
+      replyForwardBar.style.display = canReplyOrForward ? 'flex' : 'none';
+    }
+    if (btnHeaderReply) {
+      btnHeaderReply.style.display = canReplyOrForward ? 'inline-flex' : 'none';
+    }
+
     // Report spam (received mail in Inbox/Starred/All/Bin) or Not spam (inside Spam)
     detailsActionSpam.style.display = canReportSpam(email) ? 'flex' : 'none';
     detailsActionNotSpam.style.display = inSpam ? 'inline-block' : 'none';
@@ -626,36 +782,23 @@ document.addEventListener('DOMContentLoaded', () => {
       emailTasksList.innerHTML = '';
     }
 
-    detailsSubject.textContent = email.subject;
+    // Set Subject
+    const origSubject = email.subject === '(No Subject)' ? '' : (email.subject || '');
+    const cleanSubject = origSubject.replace(/^(re:\s*|fwd:\s*)+/ig, '').trim();
+    if (detailsSubject) detailsSubject.textContent = cleanSubject || origSubject || '(No Subject)';
+
     setDetailsStarState(email.isStarred);
-    const senderName = email.senderName || email.firstName || (email.sender || '').split('@')[0] || 'Unknown sender';
-    const receiverEmail = email.receiver || '';
-    const receiverName = email.receiverName ||
-      (receiverEmail.toLowerCase() === userEmail.toLowerCase()
-        ? `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim()
-        : receiverEmail.split('@')[0]);
-    detailsSenderAvatar.textContent = senderName[0].toUpperCase();
-    detailsSenderName.textContent = senderName;
-    detailsSenderEmail.textContent = email.sender ? `<${email.sender}>` : '';
-    detailsReceiverEmail.textContent = receiverEmail
-      ? `to ${receiverEmail.toLowerCase() === userEmail.toLowerCase() ? 'me' : receiverName || receiverEmail}`
-      : 'recipient unavailable';
-    detailsTimestamp.textContent = formatDetailedTimestamp(email.timestamp);
-    detailsContent.textContent = email.body;
-    emailInfoFrom.textContent = email.sender
-      ? `${senderName} <${email.sender}>`
-      : 'Sender details unavailable';
-    emailInfoTo.textContent = receiverEmail
-      ? `${receiverName || receiverEmail} <${receiverEmail}>`
-      : 'Recipient details unavailable';
-    emailInfoDate.textContent = formatFullTimestamp(email.timestamp);
-    emailInfoSubject.textContent = email.subject || '(No Subject)';
-    renderEmailAttachments(email);
+
+    // Populate main message view immediately with clicked email
+    populateMainEmailView(email);
 
     // Automatically mark email as read
     if (!email.isRead) {
       await updateEmailStatus(email._id, { isRead: true });
     }
+
+    // Load and render all messages in this conversation thread
+    await loadAndRenderThread(email);
 
     // Load any existing extracted tasks for this email
     if (email._id && !email.isDraft && !inBin && !inSpam) {
@@ -663,32 +806,212 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Format date for Gmail quote header: "Mon, Oct 19, 2026 at 1:08 PM"
+  function formatGmailQuoteDate(timestampStr) {
+    const date = new Date(timestampStr);
+    if (Number.isNaN(date.getTime())) return '';
+    const weekday = date.toLocaleString('en-US', { weekday: 'short' });
+    const month = date.toLocaleString('en-US', { month: 'short' });
+    const day = date.getDate();
+    const year = date.getFullYear();
+    const time = date.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    return `${weekday}, ${month} ${day}, ${year} at ${time}`;
+  }
+
+  // Format multiple recipients for display ("to Diya, me", and "Diya <diya@flow.com>, Elma <elma@flow.com>")
+  function formatRecipientsDisplay(email) {
+    const raw = email.receiver || '';
+    if (!raw.trim()) {
+      return {
+        shortText: 'recipient unavailable',
+        fullText: 'Recipient details unavailable'
+      };
+    }
+
+    const addresses = raw.split(',').map(r => r.trim()).filter(Boolean);
+    if (addresses.length === 0) {
+      return {
+        shortText: 'recipient unavailable',
+        fullText: 'Recipient details unavailable'
+      };
+    }
+
+    const shortNames = [];
+    const fullEntries = [];
+
+    addresses.forEach((addr, idx) => {
+      const isMe = addr.toLowerCase() === userEmail.toLowerCase();
+      const fallbackName = addr.split('@')[0];
+      const displayName = (Array.isArray(email.receiverNamesList) && email.receiverNamesList[idx])
+        ? email.receiverNamesList[idx]
+        : (isMe ? (`${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || fallbackName) : fallbackName);
+
+      if (isMe) {
+        shortNames.push('me');
+        fullEntries.push(`${displayName || 'me'} <${addr}>`);
+      } else {
+        shortNames.push(displayName);
+        fullEntries.push(`${displayName} <${addr}>`);
+      }
+    });
+
+    return {
+      shortText: `to ${shortNames.join(', ')}`,
+      fullText: fullEntries.join(', ')
+    };
+  }
+
+  // Renders email body with Gmail-style vertical line for quotes instead of '>' marks
+  function renderFormattedEmailBody(rawBody, container) {
+    if (!container) return;
+    container.replaceChildren();
+
+    if (!rawBody) return;
+
+    const lines = rawBody.split('\n');
+    const stack = [{ container, isQuote: false }];
+
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i];
+
+      // Check if line is a quote header (e.g. "On Mon, Oct 19, 2026 ... wrote:")
+      const cleanLineForCheck = line.replace(/^[>\s]+/, '').trim();
+      const isQuoteHeader = /^on\s+.+\s+wrote:$/i.test(cleanLineForCheck);
+
+      if (isQuoteHeader) {
+        const current = stack[stack.length - 1].container;
+        const headerDiv = document.createElement('div');
+        headerDiv.className = 'gmail-quote-header';
+        headerDiv.textContent = cleanLineForCheck;
+        current.appendChild(headerDiv);
+
+        const quoteDiv = document.createElement('div');
+        quoteDiv.className = 'gmail-quote';
+        current.appendChild(quoteDiv);
+
+        stack.push({ container: quoteDiv, isQuote: true });
+        continue;
+      }
+
+      // Check if line starts with '>'
+      const quoteMatch = line.match(/^>+/);
+      const quoteLevel = quoteMatch ? quoteMatch[0].length : 0;
+      if (quoteLevel > 0) {
+        line = line.replace(/^>+\s?/, '');
+
+        while (stack.filter(s => s.isQuote).length < quoteLevel) {
+          const current = stack[stack.length - 1].container;
+          const quoteDiv = document.createElement('div');
+          quoteDiv.className = 'gmail-quote';
+          current.appendChild(quoteDiv);
+          stack.push({ container: quoteDiv, isQuote: true });
+        }
+      }
+
+      const current = stack[stack.length - 1].container;
+      const lineDiv = document.createElement('div');
+      if (line === '') {
+        lineDiv.innerHTML = '&nbsp;';
+      } else {
+        lineDiv.textContent = line;
+      }
+      current.appendChild(lineDiv);
+    }
+  }
+
+  // Populate main email message elements in the details view
+  function populateMainEmailView(email) {
+    currentMainEmail = email;
+    const senderName = email.senderName || email.firstName || (email.sender || '').split('@')[0] || 'Unknown sender';
+    const recips = formatRecipientsDisplay(email);
+
+    if (detailsSenderAvatar) detailsSenderAvatar.textContent = senderName[0].toUpperCase();
+    if (detailsSenderName) detailsSenderName.textContent = senderName;
+    if (detailsSenderEmail) detailsSenderEmail.textContent = email.sender ? `<${email.sender}>` : '';
+    if (detailsReceiverEmail) detailsReceiverEmail.textContent = recips.shortText;
+    if (detailsTimestamp) detailsTimestamp.textContent = formatDetailedTimestamp(email.timestamp);
+    if (detailsContent) renderFormattedEmailBody(email.body, detailsContent);
+
+    if (emailInfoFrom) emailInfoFrom.textContent = email.sender ? `${senderName} <${email.sender}>` : 'Sender details unavailable';
+    if (emailInfoTo) emailInfoTo.textContent = recips.fullText;
+    if (emailInfoDate) emailInfoDate.textContent = formatFullTimestamp(email.timestamp);
+    if (emailInfoSubject) emailInfoSubject.textContent = email.subject || '(No Subject)';
+
+    // Header action buttons for the main email
+    const inBin = activeFolder === 'bin';
+    const inSpam = activeFolder === 'spam';
+    const canReplyOrForward = !inBin && !inSpam && !email.isDraft;
+
+    if (btnHeaderStar) {
+      btnHeaderStar.classList.toggle('starred', Boolean(email.isStarred));
+      btnHeaderStar.title = email.isStarred ? 'Unstar message' : 'Star message';
+      btnHeaderStar.style.display = (inBin || inSpam) ? 'none' : 'inline-flex';
+    }
+    if (btnHeaderReply) {
+      btnHeaderReply.style.display = canReplyOrForward ? 'inline-flex' : 'none';
+    }
+    if (btnHeaderForward) {
+      btnHeaderForward.style.display = canReplyOrForward ? 'inline-flex' : 'none';
+    }
+    if (btnHeaderDelete) {
+      btnHeaderDelete.title = inBin ? 'Permanently delete' : inSpam ? 'Delete forever' : 'Move to Bin';
+      btnHeaderDelete.style.display = 'inline-flex';
+    }
+
+    renderEmailAttachments(email);
+  }
+
   function setDetailsStarState(isStarred) {
     detailsStarIcon.classList.toggle('starred', isStarred);
     detailsStarButton.setAttribute('aria-pressed', String(isStarred));
     detailsStarButton.setAttribute('aria-label', isStarred ? 'Unstar email' : 'Star email');
     detailsStarButton.title = isStarred ? 'Unstar email' : 'Star email';
+
+    if (btnHeaderStar) {
+      btnHeaderStar.classList.toggle('starred', Boolean(isStarred));
+      btnHeaderStar.title = isStarred ? 'Unstar message' : 'Star message';
+    }
   }
 
   function closeDetailsModal() {
     emailDetailsModal.style.display = 'none';
     currentOpenEmail = null;
-    emailInfoPanel.hidden = true;
-    emailInfoToggle.setAttribute('aria-expanded', 'false');
+    currentMainEmail = null;
+    currentThreadEmails = [];
+    currentThreadActiveEmails = [];
+    currentThreadDeletedEmails = [];
+    currentConversationThreadId = null;
+    if (threadDeletedBanner) threadDeletedBanner.style.display = 'none';
+    if (threadDeletedMessages) {
+      threadDeletedMessages.style.display = 'none';
+      threadDeletedMessages.replaceChildren();
+    }
+    if (threadOlderMessages) {
+      threadOlderMessages.style.display = 'none';
+      threadOlderMessages.replaceChildren();
+    }
+    if (detailsSenderInfo) detailsSenderInfo.classList.remove('has-previous-messages');
+    if (replyForwardBar) replyForwardBar.style.display = 'none';
+    if (btnDetailReplyAll) btnDetailReplyAll.style.display = 'none';
+    if (btnHeaderReply) btnHeaderReply.style.display = 'none';
+    if (btnHeaderForward) btnHeaderForward.style.display = 'none';
+    if (btnHeaderStar) btnHeaderStar.classList.remove('starred');
+    if (emailInfoPanel) emailInfoPanel.hidden = true;
+    if (emailInfoToggle) emailInfoToggle.setAttribute('aria-expanded', 'false');
     attachmentRenderSequence += 1;
     attachmentObjectUrls.forEach(url => URL.revokeObjectURL(url));
     attachmentObjectUrls = [];
-    emailAttachmentsList.replaceChildren();
-    emailAttachmentsSection.hidden = true;
-    spamWarning.style.display = 'none';
+    if (emailAttachmentsList) emailAttachmentsList.replaceChildren();
+    if (emailAttachmentsSection) emailAttachmentsSection.hidden = true;
+    if (spamWarning) spamWarning.style.display = 'none';
     if (emailTasksSection) {
       emailTasksSection.style.display = 'none';
-      emailTasksList.innerHTML = '';
+      if (emailTasksList) emailTasksList.innerHTML = '';
     }
     if (btnExtractActions) {
       btnExtractActions.disabled = false;
-      btnExtractSpinner.style.display = 'none';
-      btnExtractText.textContent = 'Extract Actions';
+      if (btnExtractSpinner) btnExtractSpinner.style.display = 'none';
+      if (btnExtractText) btnExtractText.textContent = 'Extract Actions';
     }
   }
 
@@ -716,6 +1039,80 @@ document.addEventListener('DOMContentLoaded', () => {
     attachmentObjectUrls = [];
   }
 
+  function createAttachmentCard(email, attachment) {
+    const card = document.createElement('article');
+    card.className = 'email-attachment-card';
+    const isImage = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(attachment.mimeType);
+
+    if (isImage) {
+      const preview = document.createElement('img');
+      preview.className = 'email-attachment-preview';
+      preview.alt = `Preview of ${attachment.filename || 'image attachment'}`;
+      preview.src = '';
+      card.appendChild(preview);
+
+      fetch(`${API_BASE}/emails/${email._id}/attachments/${attachment._id}/preview`, {
+        headers: tokenHeaders()
+      })
+      .then(res => {
+        if (!res.ok) throw new Error('Image preview is unavailable');
+        return res.blob();
+      })
+      .then(blob => {
+        const objectUrl = URL.createObjectURL(blob);
+        attachmentObjectUrls.push(objectUrl);
+        preview.src = objectUrl;
+      })
+      .catch(() => {
+        const unavailable = document.createElement('span');
+        unavailable.className = 'attachment-preview-unavailable';
+        unavailable.textContent = 'IMG';
+        preview.replaceWith(unavailable);
+      });
+    } else {
+      const icon = document.createElement('span');
+      icon.className = 'attachment-file-icon';
+      icon.setAttribute('aria-hidden', 'true');
+      const ext = (attachment.filename && attachment.filename.includes('.'))
+        ? attachment.filename.split('.').pop().toUpperCase()
+        : (attachment.mimeType ? attachment.mimeType.split('/').pop().toUpperCase() : 'FILE');
+      icon.textContent = ext.slice(0, 4);
+      card.appendChild(icon);
+    }
+
+    const metadata = document.createElement('div');
+    metadata.className = 'email-attachment-metadata';
+
+    const filename = document.createElement('div');
+    filename.className = 'email-attachment-name';
+    filename.textContent = attachment.filename || 'Unnamed attachment';
+    filename.title = attachment.filename || '';
+
+    const fileSize = document.createElement('div');
+    fileSize.className = 'email-attachment-type';
+    fileSize.textContent = `${attachment.mimeType || 'File'} · ${formatFileSize(attachment.size)}`;
+
+    metadata.append(filename, fileSize);
+    card.appendChild(metadata);
+
+    const downloadButton = document.createElement('button');
+    downloadButton.type = 'button';
+    downloadButton.className = 'attachment-download-button';
+    downloadButton.innerHTML = `
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+      </svg>
+      <span>Download</span>
+    `;
+    downloadButton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      downloadAttachment(email, attachment);
+    });
+    card.appendChild(downloadButton);
+
+    return card;
+  }
+
   function renderEmailAttachments(email) {
     clearAttachmentPreviews();
     emailAttachmentsList.replaceChildren();
@@ -723,74 +1120,8 @@ document.addEventListener('DOMContentLoaded', () => {
     emailAttachmentsSection.hidden = attachments.length === 0;
     if (attachments.length === 0) return;
 
-    const renderSequence = attachmentRenderSequence;
     attachments.forEach(attachment => {
-      const card = document.createElement('article');
-      card.className = 'email-attachment-card';
-      const isImage = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(attachment.mimeType);
-      if (isImage) {
-        const preview = document.createElement('img');
-        preview.className = 'email-attachment-preview';
-        preview.alt = `Preview of ${attachment.filename || 'image attachment'}`;
-        preview.src = '';
-        card.appendChild(preview);
-        let previewRequest;
-        try {
-          previewRequest = fetch(`${API_BASE}/emails/${email._id}/attachments/${attachment._id}/preview`, {
-            headers: tokenHeaders()
-          });
-        } catch (err) {
-          const unavailable = document.createElement('span');
-          unavailable.className = 'attachment-preview-unavailable';
-          unavailable.textContent = 'Preview unavailable';
-          preview.replaceWith(unavailable);
-          console.error('Attachment preview failed:', err);
-          previewRequest = null;
-        }
-        if (previewRequest) previewRequest.then(response => {
-          if (!response.ok) throw new Error('Image preview is unavailable');
-          return response.blob();
-        }).then(blob => {
-          const objectUrl = URL.createObjectURL(blob);
-          if (renderSequence !== attachmentRenderSequence) {
-            URL.revokeObjectURL(objectUrl);
-            return;
-          }
-          attachmentObjectUrls.push(objectUrl);
-          preview.src = objectUrl;
-        }).catch(err => {
-          if (renderSequence !== attachmentRenderSequence) return;
-          const unavailable = document.createElement('span');
-          unavailable.className = 'attachment-preview-unavailable';
-          unavailable.textContent = 'Preview unavailable';
-          preview.replaceWith(unavailable);
-          console.error('Attachment preview failed:', err);
-        });
-      } else {
-        const icon = document.createElement('span');
-        icon.className = 'attachment-file-icon';
-        icon.setAttribute('aria-hidden', 'true');
-        icon.textContent = 'FILE';
-        card.appendChild(icon);
-      }
-
-      const metadata = document.createElement('div');
-      metadata.className = 'email-attachment-metadata';
-      const filename = document.createElement('div');
-      filename.className = 'email-attachment-name';
-      filename.textContent = attachment.filename || 'Unnamed attachment';
-      const fileType = document.createElement('div');
-      fileType.className = 'email-attachment-type';
-      fileType.textContent = `${attachment.mimeType || 'File'} · ${formatFileSize(attachment.size)}`;
-      metadata.append(filename, fileType);
-      card.appendChild(metadata);
-
-      const downloadButton = document.createElement('button');
-      downloadButton.type = 'button';
-      downloadButton.className = 'attachment-download-button';
-      downloadButton.textContent = 'Download';
-      downloadButton.addEventListener('click', () => downloadAttachment(email, attachment));
-      card.appendChild(downloadButton);
+      const card = createAttachmentCard(email, attachment);
       emailAttachmentsList.appendChild(card);
     });
   }
@@ -1316,13 +1647,29 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!currentOpenEmail) return;
 
     if (isPermanentDeleteFolder()) {
-      if (confirm('Permanently delete this email?')) {
-        await deleteEmailPermanently(currentOpenEmail._id);
+      if (confirm('Permanently delete this conversation?')) {
+        const ids = (currentThreadEmails && currentThreadEmails.length > 0)
+          ? currentThreadEmails.map(e => e._id)
+          : [currentOpenEmail._id];
+        for (const id of ids) {
+          await deleteEmailPermanently(id);
+        }
         closeDetailsModal();
         fetchEmails(activeFolder);
       }
     } else {
-      await updateEmailStatus(currentOpenEmail._id, { isTrash: true });
+      let ids;
+      if (activeFolder === 'sent') {
+        const sentEmails = (currentThreadEmails || []).filter(m => (m.sender || '').toLowerCase() === userEmail.toLowerCase());
+        ids = sentEmails.length > 0 ? sentEmails.map(m => m._id) : [currentOpenEmail._id];
+      } else {
+        ids = (currentThreadActiveEmails && currentThreadActiveEmails.length > 0)
+          ? currentThreadActiveEmails.map(e => e._id)
+          : (currentThreadEmails && currentThreadEmails.length > 0 ? currentThreadEmails.map(e => e._id) : [currentOpenEmail._id]);
+      }
+      for (const id of ids) {
+        await updateEmailStatus(id, { isTrash: true });
+      }
       closeDetailsModal();
       fetchEmails(activeFolder);
     }
@@ -1469,6 +1816,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Open Compose Modal
   composeBtn.addEventListener('click', () => {
+    activeThreadId = null;
+    activeInReplyTo = null;
+    currentDraftId = null;
+    composeAttachments = [];
+    renderComposeAttachments();
+    composeForm.reset();
+    if (chipsContainer) {
+      chipsContainer.querySelectorAll('.recipient-chip').forEach(chip => chip.remove());
+    }
+    if (composeModalTitle) composeModalTitle.textContent = 'New Message';
     composeModal.classList.remove('maximized');
     composeModal.classList.remove('minimized');
     composeMaximizeBtn.textContent = '⤢';
@@ -1584,7 +1941,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const response = await fetch(`${API_BASE}/emails`, {
       method: 'POST',
       headers: tokenHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ sender: userEmail, receiver, subject, body, isDraft: true })
+      body: JSON.stringify({
+        sender: userEmail,
+        receiver,
+        subject,
+        body,
+        attachments: composeAttachments,
+        isDraft: true
+      })
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || 'Could not prepare a draft for attachments.');
@@ -1659,19 +2023,33 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function removeComposeAttachment(attachment) {
-    if (!currentDraftId) return;
+    if (!currentDraftId) {
+      composeAttachments = composeAttachments.filter(att =>
+        (att._id && attachment._id ? att._id !== attachment._id : att !== attachment)
+      );
+      renderComposeAttachments();
+      return;
+    }
     try {
       const response = await fetch(
         `${API_BASE}/emails/${currentDraftId}/attachments/${attachment._id}`,
         { method: 'DELETE', headers: tokenHeaders() }
       );
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Could not remove this attachment.');
-      composeAttachments = data.attachments || [];
+      if (response.ok) {
+        const data = await response.json();
+        composeAttachments = data.attachments || [];
+      } else {
+        composeAttachments = composeAttachments.filter(att =>
+          (att._id && attachment._id ? att._id !== attachment._id : att !== attachment)
+        );
+      }
       renderComposeAttachments();
     } catch (err) {
       console.error('Attachment removal failed:', err);
-      alert(err.message || 'Could not remove this attachment.');
+      composeAttachments = composeAttachments.filter(att =>
+        (att._id && attachment._id ? att._id !== attachment._id : att !== attachment)
+      );
+      renderComposeAttachments();
     }
   }
 
@@ -1879,54 +2257,45 @@ document.addEventListener('DOMContentLoaded', () => {
     const body = emailBodyInput.value;
 
     async function executeSend(finalSubject) {
-      const sentRecipients = [];
-      const failedRecipients = [];
-      const failureMessages = [];
-      for (const receiver of recipientEmails) {
-        try {
-          const response = await fetch(`${API_BASE}/emails`, {
-            method: 'POST',
-            headers: tokenHeaders({
-              'Content-Type': 'application/json'
-            }),
-            body: JSON.stringify({
-              sender: userEmail,
-              receiver,
-              subject: finalSubject || '(No Subject)',
-              body,
-              ...(currentDraftId ? { draftId: currentDraftId } : {})
-            })
-          });
+      const allReceiversStr = recipientEmails.join(', ');
+      try {
+        const response = await fetch(`${API_BASE}/emails`, {
+          method: 'POST',
+          headers: tokenHeaders({
+            'Content-Type': 'application/json'
+          }),
+          body: JSON.stringify({
+            sender: userEmail,
+            receiver: allReceiversStr,
+            subject: finalSubject || '(No Subject)',
+            body,
+            attachments: composeAttachments,
+            ...(currentDraftId ? { draftId: currentDraftId } : {}),
+            ...(activeThreadId ? { threadId: activeThreadId } : {}),
+            ...(activeInReplyTo ? { inReplyTo: activeInReplyTo } : {})
+          })
+        });
 
-          if (response.ok) {
-            sentRecipients.push(receiver);
-          } else {
-            const data = await response.json().catch(() => ({}));
-            failedRecipients.push(receiver);
-            failureMessages.push(data.message || `Could not send to ${receiver}.`);
+        if (response.ok) {
+          if (currentDraftId) {
+            await deleteEmailPermanently(currentDraftId);
           }
-        } catch (err) {
-          console.error(`Send email to ${receiver} connection failed:`, err);
-          failedRecipients.push(receiver);
-          failureMessages.push(err.message || `Could not send to ${receiver}.`);
-        }
-      }
+          alert('Email sent successfully!');
+          closeComposeModal();
 
-      if (sentRecipients.length > 0 && failedRecipients.length === 0) {
-        // If this message started as a draft, remove the draft now that it was sent
-        if (currentDraftId) {
-          await deleteEmailPermanently(currentDraftId);
+          if (emailDetailsModal.style.display === 'flex' && currentOpenEmail) {
+            await loadAndRenderThread(currentOpenEmail);
+          }
+          fetchEmails(activeFolder);
+          activeThreadId = null;
+          activeInReplyTo = null;
+        } else {
+          const data = await response.json().catch(() => ({}));
+          alert(data.message || 'Could not send email. Please try again.');
         }
-        alert('Email sent successfully!');
-        closeComposeModal();
-        fetchEmails(activeFolder);
-      } else if (sentRecipients.length > 0) {
-        chipsContainer.querySelectorAll('.recipient-chip').forEach(chip => chip.remove());
-        failedRecipients.forEach(addRecipientChip);
-        await saveDraft();
-        alert(`Sent to ${sentRecipients.join(', ')}.\nCould not send to ${failedRecipients.join(', ')}. The unsent recipients remain in the draft.\n\n${failureMessages.join('\n')}`);
-      } else {
-        alert(`Email was not sent. Your compose window and draft have been kept.\n\n${failureMessages.join('\n')}`);
+      } catch (err) {
+        console.error('Send email failed:', err);
+        alert(err.message || 'Could not send email. Please try again.');
       }
     }
 
@@ -1952,8 +2321,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function closeComposeModal() {
+    activeThreadId = null;
+    activeInReplyTo = null;
     currentDraftId = null;
     composeAttachments = [];
+    if (composeModalTitle) composeModalTitle.textContent = 'New Message';
     composeModal.style.display = 'none';
     composeForm.reset();
     renderComposeAttachments();
@@ -2007,7 +2379,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const response = await fetch(`${API_BASE}/emails`, {
           method: 'POST',
           headers: tokenHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({ sender: userEmail, receiver, subject, body, isDraft: true })
+          body: JSON.stringify({
+            sender: userEmail,
+            receiver,
+            subject,
+            body,
+            attachments: composeAttachments,
+            isDraft: true
+          })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || 'Failed to save draft.');
@@ -2054,6 +2433,661 @@ document.addEventListener('DOMContentLoaded', () => {
 
     composeModal.style.display = 'flex';
     emailBodyInput.focus();
+  }
+
+  // ==========================================
+  // 9b. CONVERSATION THREAD, REPLY & FORWARD (Gmail-style)
+  // ==========================================
+
+  // Render cards for deleted messages inside a conversation thread
+  function renderDeletedMessageCards(deletedEmails) {
+    if (!threadDeletedMessages) return;
+    threadDeletedMessages.replaceChildren();
+
+    deletedEmails.forEach((email) => {
+      const card = document.createElement('div');
+      card.className = 'thread-message-card deleted-card';
+      card.setAttribute('data-id', email._id);
+
+      const senderDisplayName = email.senderName || email.firstName || (email.sender || '').split('@')[0] || 'Unknown';
+      const senderInitial = senderDisplayName.charAt(0).toUpperCase();
+      const detailedTime = formatDetailedTimestamp(email.timestamp);
+      const recips = formatRecipientsDisplay(email);
+
+      const headerRow = document.createElement('div');
+      headerRow.className = 'thread-message-header';
+      headerRow.innerHTML = `
+        <div class="thread-sender-avatar">${escapeHtml(senderInitial)}</div>
+        <div class="thread-sender-meta">
+          <div class="thread-sender-row">
+            <span class="thread-sender-name">${escapeHtml(senderDisplayName)}</span>
+            <span class="thread-sender-email">&lt;${escapeHtml(email.sender || '')}&gt;</span>
+            <span class="thread-folder-badge thread-bin-badge">Bin</span>
+          </div>
+          <div class="thread-receiver-row">
+            <span>${escapeHtml(recips.shortText)}</span>
+          </div>
+        </div>
+        <div class="thread-header-right">
+          <span class="thread-time">${escapeHtml(detailedTime)}</span>
+          <button class="deleted-msg-restore-btn" title="Restore this message" type="button">
+            Restore
+          </button>
+          <button class="deleted-msg-delete-btn" title="Delete forever" type="button">
+            Delete forever
+          </button>
+        </div>
+      `;
+
+      const restoreBtn = headerRow.querySelector('.deleted-msg-restore-btn');
+      restoreBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await restoreEmail(email._id);
+        if (currentOpenEmail) {
+          await loadAndRenderThread(currentOpenEmail);
+        }
+        fetchEmails(activeFolder);
+      });
+
+      const deleteForeverBtn = headerRow.querySelector('.deleted-msg-delete-btn');
+      deleteForeverBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (confirm('Permanently delete this message?')) {
+          await deleteEmailPermanently(email._id);
+          if (currentOpenEmail) {
+            await loadAndRenderThread(currentOpenEmail);
+          }
+          fetchEmails(activeFolder);
+        }
+      });
+
+      const bodyDiv = document.createElement('div');
+      bodyDiv.className = 'thread-message-body';
+      renderFormattedEmailBody(email.body, bodyDiv);
+
+      card.appendChild(headerRow);
+      card.appendChild(bodyDiv);
+
+      if (Array.isArray(email.attachments) && email.attachments.length > 0) {
+        const attContainer = document.createElement('div');
+        attContainer.className = 'thread-message-attachments';
+        renderCardAttachments(email, attContainer);
+        card.appendChild(attContainer);
+      }
+
+      threadDeletedMessages.appendChild(card);
+    });
+  }
+
+  // Fetch all messages in the conversation thread
+  async function loadAndRenderThread(baseEmail) {
+    const targetEmail = baseEmail || currentMainEmail || currentOpenEmail;
+    if (!targetEmail) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/emails/${targetEmail._id}/thread`, {
+        headers: tokenHeaders({ 'x-user-email': userEmail })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        currentThreadEmails = Array.isArray(data.emails) && data.emails.length > 0 ? data.emails : [targetEmail];
+        currentConversationThreadId = data.threadId || targetEmail.threadId || targetEmail._id;
+      } else {
+        currentThreadEmails = [targetEmail];
+        currentConversationThreadId = targetEmail.threadId || targetEmail._id;
+      }
+    } catch (err) {
+      console.error('Error fetching email thread:', err);
+      currentThreadEmails = [targetEmail];
+      currentConversationThreadId = targetEmail.threadId || targetEmail._id;
+    }
+
+    // Deduplicate any duplicate self-sent copies in thread
+    const seenMsgSigs = new Set();
+    currentThreadEmails = currentThreadEmails.filter(e => {
+      const timeMs = new Date(e.timestamp).getTime();
+      const roundedTime = Math.floor(timeMs / 3000);
+      const sig = `${e.sender}|${e.subject}|${e.body}|${roundedTime}`;
+      if (seenMsgSigs.has(sig)) return false;
+      seenMsgSigs.add(sig);
+      return true;
+    });
+
+    const inBin = activeFolder === 'bin';
+    const inSpam = activeFolder === 'spam';
+
+    if (inBin) {
+      currentThreadActiveEmails = currentThreadEmails.filter(e => e.isTrash);
+      currentThreadDeletedEmails = [];
+    } else {
+      currentThreadActiveEmails = currentThreadEmails.filter(e => !e.isTrash);
+      currentThreadDeletedEmails = currentThreadEmails.filter(e => e.isTrash);
+    }
+
+    // If there are no active emails in this view (e.g. user trashed the last active message in this thread)
+    if (currentThreadActiveEmails.length === 0) {
+      if (!inBin && currentThreadDeletedEmails.length > 0) {
+        closeDetailsModal();
+        fetchEmails(activeFolder);
+        return;
+      }
+      currentThreadActiveEmails = currentThreadEmails;
+    }
+
+    // Gmail-style Deleted Messages Banner
+    if (threadDeletedBanner && threadDeletedText) {
+      if (currentThreadDeletedEmails.length > 0) {
+        const count = currentThreadDeletedEmails.length;
+        threadDeletedText.textContent = `${count} deleted message${count > 1 ? 's' : ''} in this conversation.`;
+        if (btnViewDeletedMsg) {
+          const isExpanded = threadDeletedMessages && threadDeletedMessages.style.display === 'flex';
+          btnViewDeletedMsg.textContent = isExpanded
+            ? (count > 1 ? 'Hide messages' : 'Hide message')
+            : (count > 1 ? 'View messages' : 'View message');
+        }
+        threadDeletedBanner.style.display = 'flex';
+        renderDeletedMessageCards(currentThreadDeletedEmails);
+      } else {
+        threadDeletedBanner.style.display = 'none';
+        if (threadDeletedMessages) {
+          threadDeletedMessages.style.display = 'none';
+          threadDeletedMessages.replaceChildren();
+        }
+      }
+    }
+
+    // The latest active message is populated in the main view
+    const latestEmail = currentThreadActiveEmails[currentThreadActiveEmails.length - 1] || targetEmail;
+    currentMainEmail = latestEmail;
+    currentOpenEmail = latestEmail;
+    populateMainEmailView(latestEmail);
+
+    // Older messages in conversation rendered into thread-older-messages
+    const olderEmails = currentThreadActiveEmails.slice(0, currentThreadActiveEmails.length - 1);
+    if (threadOlderMessages) {
+      threadOlderMessages.replaceChildren();
+
+      if (olderEmails.length > 0) {
+        threadOlderMessages.style.display = 'flex';
+        threadOlderMessages.style.flexDirection = 'column';
+        threadOlderMessages.style.gap = '8px';
+        threadOlderMessages.style.marginBottom = '16px';
+
+        olderEmails.forEach((email) => {
+          const card = document.createElement('div');
+          card.className = 'thread-message-card collapsed';
+          card.setAttribute('data-id', email._id);
+
+          const senderDisplayName = email.senderName || email.firstName || (email.sender || '').split('@')[0] || 'Unknown';
+          const senderInitial = senderDisplayName.charAt(0).toUpperCase();
+          const shortTime = formatTimestamp(email.timestamp);
+          const detailedTime = formatDetailedTimestamp(email.timestamp);
+          const recips = formatRecipientsDisplay(email);
+
+          // Collapsed row (default for older messages)
+          const collapsedRow = document.createElement('div');
+          collapsedRow.className = 'thread-message-collapsed-row';
+          collapsedRow.innerHTML = `
+            <div class="thread-collapsed-avatar">${escapeHtml(senderInitial)}</div>
+            <span class="thread-collapsed-name">${escapeHtml(senderDisplayName)}</span>
+            <span class="thread-collapsed-snippet">${escapeHtml((email.body || '').replace(/\\s+/g, ' ').slice(0, 100))}</span>
+            <span class="thread-collapsed-time">${escapeHtml(shortTime)}</span>
+            <button class="action-icon-btn thread-star-btn ${email.isStarred ? 'starred' : ''}" title="${email.isStarred ? 'Unstar message' : 'Star message'}" type="button">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+              </svg>
+            </button>
+          `;
+
+          const collapsedStarBtn = collapsedRow.querySelector('.thread-star-btn');
+          collapsedStarBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const nextStarred = !email.isStarred;
+            email.isStarred = nextStarred;
+            collapsedStarBtn.classList.toggle('starred', nextStarred);
+            collapsedStarBtn.title = nextStarred ? 'Unstar message' : 'Star message';
+            await updateEmailStatus(email._id, { isStarred: nextStarred });
+            fetchEmails(activeFolder);
+          });
+
+          // Expanded view (revealed on click)
+          const expandedView = document.createElement('div');
+          expandedView.className = 'thread-message-expanded';
+          expandedView.style.display = 'none';
+
+          const headerRow = document.createElement('div');
+          headerRow.className = 'thread-message-header';
+          headerRow.innerHTML = `
+            <div class="thread-sender-avatar">${escapeHtml(senderInitial)}</div>
+            <div class="thread-sender-meta">
+              <div class="thread-sender-row">
+                <span class="thread-sender-name">${escapeHtml(senderDisplayName)}</span>
+                <span class="thread-sender-email">&lt;${escapeHtml(email.sender || '')}&gt;</span>
+              </div>
+              <div class="thread-receiver-row">
+                <span>${escapeHtml(recips.shortText)}</span>
+              </div>
+            </div>
+            <div class="thread-header-right">
+              <span class="thread-time">${escapeHtml(detailedTime)}</span>
+              <button class="action-icon-btn thread-star-btn ${email.isStarred ? 'starred' : ''}" title="${email.isStarred ? 'Unstar message' : 'Star message'}" type="button">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                  <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                </svg>
+              </button>
+              <button class="action-icon-btn thread-quick-reply-btn" title="Reply" type="button">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                  <path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/>
+                </svg>
+              </button>
+              <button class="action-icon-btn thread-forward-btn" title="Forward" type="button">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                  <path d="M14 9V5l7 7-7 7v-4.1c-5 0-8.5 1.6-11 5.1 1-5 4-10 11-11z"/>
+                </svg>
+              </button>
+              <button class="action-icon-btn thread-delete-btn" title="Move to Bin" type="button">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                  <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                </svg>
+              </button>
+            </div>
+          `;
+
+          const starBtn = headerRow.querySelector('.thread-star-btn');
+          starBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const nextStarred = !email.isStarred;
+            email.isStarred = nextStarred;
+            starBtn.classList.toggle('starred', nextStarred);
+            collapsedStarBtn.classList.toggle('starred', nextStarred);
+            starBtn.title = nextStarred ? 'Unstar message' : 'Star message';
+            await updateEmailStatus(email._id, { isStarred: nextStarred });
+            fetchEmails(activeFolder);
+          });
+
+          headerRow.querySelector('.thread-quick-reply-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            triggerReply(email);
+          });
+
+          headerRow.querySelector('.thread-forward-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            triggerForward(email);
+          });
+
+          headerRow.querySelector('.thread-delete-btn').addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (inBin) {
+              if (confirm('Permanently delete this message?')) {
+                await deleteEmailPermanently(email._id);
+                await loadAndRenderThread(currentOpenEmail);
+                fetchEmails(activeFolder);
+              }
+            } else {
+              await updateEmailStatus(email._id, { isTrash: true });
+              await loadAndRenderThread(currentOpenEmail);
+              fetchEmails(activeFolder);
+            }
+          });
+
+          const bodyDiv = document.createElement('div');
+          bodyDiv.className = 'thread-message-body';
+          renderFormattedEmailBody(email.body, bodyDiv);
+
+          expandedView.appendChild(headerRow);
+          expandedView.appendChild(bodyDiv);
+
+          if (Array.isArray(email.attachments) && email.attachments.length > 0) {
+            const attContainer = document.createElement('div');
+            attContainer.className = 'thread-message-attachments';
+            renderCardAttachments(email, attContainer);
+            expandedView.appendChild(attContainer);
+          }
+
+          card.appendChild(collapsedRow);
+          card.appendChild(expandedView);
+
+          card.addEventListener('click', () => {
+            const isCollapsed = card.classList.contains('collapsed');
+            if (isCollapsed) {
+              card.classList.remove('collapsed');
+              collapsedRow.style.display = 'none';
+              expandedView.style.display = 'block';
+            } else {
+              card.classList.add('collapsed');
+              collapsedRow.style.display = 'flex';
+              expandedView.style.display = 'none';
+            }
+          });
+
+          threadOlderMessages.appendChild(card);
+        });
+      } else {
+        threadOlderMessages.style.display = 'none';
+      }
+    }
+
+    // Determine Reply all availability for the latest message
+    const participants = new Set();
+    if (latestEmail.sender && latestEmail.sender.toLowerCase() !== userEmail.toLowerCase()) {
+      participants.add(latestEmail.sender.toLowerCase());
+    }
+    if (latestEmail.receiver) {
+      latestEmail.receiver.split(',').forEach(r => {
+        const clean = r.trim().toLowerCase();
+        if (clean && clean !== userEmail.toLowerCase()) {
+          participants.add(clean);
+        }
+      });
+    }
+
+    const canReplyOrForward = !inBin && !inSpam && !latestEmail.isDraft;
+
+    if (btnDetailReplyAll) {
+      btnDetailReplyAll.style.display = (canReplyOrForward && participants.size > 1) ? 'inline-flex' : 'none';
+    }
+    if (replyForwardBar) {
+      replyForwardBar.style.display = canReplyOrForward ? 'flex' : 'none';
+    }
+    if (btnHeaderReply) {
+      btnHeaderReply.style.display = canReplyOrForward ? 'inline-flex' : 'none';
+    }
+    if (btnHeaderForward) {
+      btnHeaderForward.style.display = canReplyOrForward ? 'inline-flex' : 'none';
+    }
+
+    if (detailsSenderInfo) {
+      if (currentThreadDeletedEmails.length > 0 || (olderEmails && olderEmails.length > 0)) {
+        detailsSenderInfo.classList.add('has-previous-messages');
+      } else {
+        detailsSenderInfo.classList.remove('has-previous-messages');
+      }
+    }
+  }
+
+  // Render individual card attachments inside thread messages
+  function renderCardAttachments(email, container) {
+    const attachments = Array.isArray(email.attachments) ? email.attachments : [];
+    if (attachments.length === 0) return;
+
+    const list = document.createElement('div');
+    list.className = 'email-attachments-list';
+
+    attachments.forEach(attachment => {
+      const card = createAttachmentCard(email, attachment);
+      list.appendChild(card);
+    });
+
+    container.appendChild(list);
+  }
+
+  // Open compose modal populated with Reply content
+  async function triggerReply(specificEmail = null) {
+    const email = specificEmail || (currentThreadEmails && currentThreadEmails.length > 0 
+      ? currentThreadEmails[currentThreadEmails.length - 1] 
+      : currentOpenEmail);
+
+    if (!email) return;
+    if (attachmentUploadInProgress) {
+      alert('Please wait for attachments to finish uploading.');
+      return;
+    }
+
+    // If another message is currently being composed, auto-save it as draft first
+    if (composeModal.style.display === 'flex') {
+      if (!await saveDraft()) return;
+      closeComposeModal();
+    }
+
+    currentDraftId = null;
+    composeAttachments = [];
+    renderComposeAttachments();
+
+    // Link this reply to the current conversation thread!
+    activeThreadId = currentConversationThreadId || email.threadId || email._id;
+    activeInReplyTo = email._id;
+
+    composeModal.classList.remove('maximized');
+    composeModal.classList.remove('minimized');
+    composeMaximizeBtn.textContent = '⤢';
+    composeMaximizeBtn.title = 'Maximize';
+    if (composeModalTitle) composeModalTitle.textContent = 'Reply';
+
+    // Clear recipient chips
+    chipsContainer.querySelectorAll('.recipient-chip').forEach(chip => chip.remove());
+
+    // Reply recipient: if email sender is current user, reply to receiver; else reply to sender
+    const replyRecipient = (email.sender && email.sender.toLowerCase() === userEmail.toLowerCase())
+      ? (email.receiver ? email.receiver.split(',')[0].trim() : '')
+      : (email.sender || '');
+
+    if (replyRecipient) {
+      addRecipientChip(replyRecipient);
+    }
+
+    // Clean subject and prepend Re:
+    const origSubject = email.subject === '(No Subject)' ? '' : (email.subject || '');
+    const cleanSubject = origSubject.replace(/^(re:\s*|fwd:\s*)+/ig, '').trim();
+    emailSubjectInput.value = cleanSubject ? `Re: ${cleanSubject}` : 'Re: ';
+
+    // Quoted message body with standard email formatting (no '>' marks, rendered with Gmail-style line)
+    const senderName = email.senderName || email.firstName || (email.sender ? email.sender.split('@')[0] : 'Unknown');
+    const dateStr = formatGmailQuoteDate(email.timestamp);
+    const cleanBody = (email.body || '').replace(/^[>\s]+/gm, '');
+
+    emailBodyInput.value = `\n\n\nOn ${dateStr} ${senderName} <${email.sender}> wrote:\n${cleanBody}`;
+
+    composeModal.style.display = 'flex';
+    emailBodyInput.focus();
+    emailBodyInput.setSelectionRange(0, 0);
+  }
+
+  // Open compose modal populated with Reply all content
+  async function triggerReplyAll(specificEmail = null) {
+    const email = specificEmail || currentMainEmail || (currentThreadEmails && currentThreadEmails.length > 0
+      ? currentThreadEmails[currentThreadEmails.length - 1]
+      : currentOpenEmail);
+
+    if (!email) return;
+    if (attachmentUploadInProgress) {
+      alert('Please wait for attachments to finish uploading.');
+      return;
+    }
+
+    if (composeModal.style.display === 'flex') {
+      if (!await saveDraft()) return;
+      closeComposeModal();
+    }
+
+    currentDraftId = null;
+    composeAttachments = [];
+    renderComposeAttachments();
+
+    // Link this reply to the current conversation thread!
+    activeThreadId = currentConversationThreadId || email.threadId || email._id;
+    activeInReplyTo = email._id;
+
+    composeModal.classList.remove('maximized');
+    composeModal.classList.remove('minimized');
+    composeMaximizeBtn.textContent = '⤢';
+    composeMaximizeBtn.title = 'Maximize';
+    if (composeModalTitle) composeModalTitle.textContent = 'Reply all';
+
+    chipsContainer.querySelectorAll('.recipient-chip').forEach(chip => chip.remove());
+
+    // Collect all participants across the conversation:
+    // Original sender + other recipients, excluding the logged-in user
+    const recipientsSet = new Set();
+    if (email.sender && email.sender.toLowerCase() !== userEmail.toLowerCase()) {
+      recipientsSet.add(email.sender.toLowerCase());
+    }
+    if (email.receiver) {
+      email.receiver.split(',').forEach(r => {
+        const clean = r.trim().toLowerCase();
+        if (clean && clean !== userEmail.toLowerCase()) {
+          recipientsSet.add(clean);
+        }
+      });
+    }
+
+    if (recipientsSet.size === 0 && email.receiver) {
+      email.receiver.split(',').forEach(r => {
+        const clean = r.trim().toLowerCase();
+        if (clean) recipientsSet.add(clean);
+      });
+    }
+
+    recipientsSet.forEach(r => addRecipientChip(r));
+
+    // Clean subject and prepend Re:
+    const origSubject = email.subject === '(No Subject)' ? '' : (email.subject || '');
+    const cleanSubject = origSubject.replace(/^(re:\s*|fwd:\s*)+/ig, '').trim();
+    emailSubjectInput.value = cleanSubject ? `Re: ${cleanSubject}` : 'Re: ';
+
+    // Quoted message body with standard email formatting (no '>' marks, rendered with Gmail-style line)
+    const senderName = email.senderName || email.firstName || (email.sender ? email.sender.split('@')[0] : 'Unknown');
+    const dateStr = formatGmailQuoteDate(email.timestamp);
+    const cleanBody = (email.body || '').replace(/^[>\s]+/gm, '');
+
+    emailBodyInput.value = `\n\n\nOn ${dateStr} ${senderName} <${email.sender}> wrote:\n${cleanBody}`;
+
+    composeModal.style.display = 'flex';
+    emailBodyInput.focus();
+    emailBodyInput.setSelectionRange(0, 0);
+  }
+
+  // Open compose modal populated with Forward content
+  async function triggerForward(specificEmail = null) {
+    const email = specificEmail || currentMainEmail || (currentThreadEmails && currentThreadEmails.length > 0
+      ? currentThreadEmails[currentThreadEmails.length - 1]
+      : currentOpenEmail);
+
+    if (!email) return;
+    if (attachmentUploadInProgress) {
+      alert('Please wait for attachments to finish uploading.');
+      return;
+    }
+
+    if (composeModal.style.display === 'flex') {
+      if (!await saveDraft()) return;
+      closeComposeModal();
+    }
+
+    currentDraftId = null;
+    composeAttachments = Array.isArray(email.attachments) ? [...email.attachments] : [];
+    renderComposeAttachments();
+
+    // Forwards start a new conversation
+    activeThreadId = null;
+    activeInReplyTo = email._id;
+
+    composeModal.classList.remove('maximized');
+    composeModal.classList.remove('minimized');
+    composeMaximizeBtn.textContent = '⤢';
+    composeMaximizeBtn.title = 'Maximize';
+    if (composeModalTitle) composeModalTitle.textContent = 'Forward';
+
+    chipsContainer.querySelectorAll('.recipient-chip').forEach(chip => chip.remove());
+    emailToInput.value = '';
+
+    // Clean subject and prepend Fwd:
+    const origSubject = email.subject === '(No Subject)' ? '' : (email.subject || '');
+    const cleanSubject = origSubject.replace(/^(re:\s*|fwd:\s*)+/ig, '').trim();
+    emailSubjectInput.value = cleanSubject ? `Fwd: ${cleanSubject}` : 'Fwd: ';
+
+    // Forwarded message body header matching Gmail format
+    const senderName = email.senderName || email.firstName || (email.sender ? email.sender.split('@')[0] : 'Unknown');
+    const dateStr = formatFullTimestamp(email.timestamp);
+    const recips = formatRecipientsDisplay(email);
+
+    emailBodyInput.value = `\n\n\n---------- Forwarded message ---------\nFrom: ${senderName} <${email.sender}>\nDate: ${dateStr}\nSubject: ${origSubject || '(No Subject)'}\nTo: ${recips.fullText || email.receiver || ''}\n\n${email.body || ''}`;
+
+    composeModal.style.display = 'flex';
+    emailToInput.focus();
+  }
+
+  // Bind Header actions (Star, Reply, Forward, Delete) and Bottom Reply/Forward buttons
+  if (btnHeaderStar) {
+    btnHeaderStar.addEventListener('click', async () => {
+      const target = currentMainEmail || currentOpenEmail;
+      if (!target) return;
+      const nextStarred = !target.isStarred;
+      target.isStarred = nextStarred;
+      setDetailsStarState(nextStarred);
+      await updateEmailStatus(target._id, { isStarred: nextStarred });
+      fetchEmails(activeFolder);
+    });
+  }
+
+  if (btnHeaderReply) btnHeaderReply.addEventListener('click', () => triggerReply(currentMainEmail || currentOpenEmail));
+  if (btnHeaderForward) btnHeaderForward.addEventListener('click', () => triggerForward(currentMainEmail || currentOpenEmail));
+
+  if (btnHeaderDelete) {
+    btnHeaderDelete.addEventListener('click', async () => {
+      const target = currentMainEmail || currentOpenEmail;
+      if (!target) return;
+
+      if (isPermanentDeleteFolder()) {
+        if (confirm('Permanently delete this email?')) {
+          await deleteEmailPermanently(target._id);
+          const remaining = (currentThreadEmails || []).filter(e => e._id !== target._id);
+          if (remaining.length > 0) {
+            await loadAndRenderThread(remaining[remaining.length - 1]);
+          } else {
+            closeDetailsModal();
+          }
+          fetchEmails(activeFolder);
+        }
+      } else {
+        await updateEmailStatus(target._id, { isTrash: true });
+        const remainingActive = (currentThreadActiveEmails || []).filter(e => e._id !== target._id);
+        if (remainingActive.length > 0) {
+          await loadAndRenderThread(remainingActive[remainingActive.length - 1]);
+        } else {
+          closeDetailsModal();
+        }
+        fetchEmails(activeFolder);
+      }
+    });
+  }
+
+  if (btnDetailReply) btnDetailReply.addEventListener('click', () => triggerReply(currentMainEmail || currentOpenEmail));
+  if (btnDetailReplyAll) btnDetailReplyAll.addEventListener('click', triggerReplyAll);
+  if (btnDetailForward) btnDetailForward.addEventListener('click', () => triggerForward(currentMainEmail || currentOpenEmail));
+
+  // Deleted messages in conversation banner links
+  if (btnViewDeletedMsg) {
+    btnViewDeletedMsg.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (!threadDeletedMessages) return;
+      const isHidden = threadDeletedMessages.style.display === 'none' || !threadDeletedMessages.style.display;
+      if (isHidden) {
+        threadDeletedMessages.style.display = 'flex';
+        btnViewDeletedMsg.textContent = currentThreadDeletedEmails.length > 1 ? 'Hide messages' : 'Hide message';
+      } else {
+        threadDeletedMessages.style.display = 'none';
+        btnViewDeletedMsg.textContent = currentThreadDeletedEmails.length > 1 ? 'View messages' : 'View message';
+      }
+    });
+  }
+
+  if (btnDeleteForeverMsg) {
+    btnDeleteForeverMsg.addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (!currentThreadDeletedEmails || currentThreadDeletedEmails.length === 0) return;
+      if (confirm('Permanently delete all deleted messages in this conversation?')) {
+        for (const msg of currentThreadDeletedEmails) {
+          await deleteEmailPermanently(msg._id);
+        }
+        const activeTarget = currentMainEmail || currentOpenEmail;
+        if (activeTarget) {
+          await loadAndRenderThread(activeTarget);
+        } else {
+          closeDetailsModal();
+        }
+        fetchEmails(activeFolder);
+      }
+    });
   }
 
   // Show number of drafts in sidebar badge even when another folder is open

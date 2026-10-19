@@ -13,6 +13,7 @@ router.get('/:id/attachments/:attachmentId/preview', requireTokenAuth, attachmen
 router.delete('/:id/attachments/:attachmentId', requireTokenAuth, attachmentController.removeDraftAttachment);
 router.get('/starred', emailController.getStarredEmails);
 router.get('/counts', requireAuth, emailController.getFolderCounts);
+router.get('/:id/thread', requireAuth, emailController.getEmailThread);
 router.get('/', emailController.getEmails);
 router.delete('/folder/:folder/empty', requireAuth, emailController.emptyFolder);
 router.patch('/:id/star', emailController.starEmail);

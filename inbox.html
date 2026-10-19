@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>InboxFlow - Inbox</title>
-  <link rel="stylesheet" href="inbox.css?v=7">
+  <link rel="stylesheet" href="inbox.css?v=15">
   <!-- Google Fonts: Roboto and Outfit -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -275,7 +275,25 @@
                 <img src="images/star-regular-full.svg" alt="" class="details-star-icon">
               </button>
             </div>
-            <div class="details-sender-info">
+
+            <!-- Deleted Messages in Conversation Banner (Gmail-style) -->
+            <div class="thread-deleted-banner" id="thread-deleted-banner" style="display: none;">
+              <span class="thread-deleted-text" id="thread-deleted-text">1 deleted message in this conversation.</span>
+              <div class="thread-deleted-actions">
+                <button type="button" class="thread-deleted-link" id="btn-view-deleted-msg">View message</button>
+                <span class="thread-deleted-sep">or</span>
+                <span class="thread-deleted-forever-wrap"><button type="button" class="thread-deleted-link" id="btn-delete-forever-msg">delete forever</button>.</span>
+              </div>
+            </div>
+
+            <!-- Deleted Messages Container (expanded when "View message" is clicked) -->
+            <div class="thread-deleted-messages" id="thread-deleted-messages" style="display: none;"></div>
+
+            <!-- Older Messages in Conversation Thread (Collapsed by default, matching Gmail) -->
+            <div class="thread-older-messages" id="thread-older-messages" style="display: none;"></div>
+
+            <!-- Current / Latest Message in Conversation -->
+            <div class="details-sender-info" id="details-sender-info">
               <div class="sender-avatar" id="details-sender-avatar"></div>
               <div class="sender-metadata">
                 <div class="sender-identity">
@@ -290,7 +308,29 @@
                   </button>
                 </div>
               </div>
-              <span class="details-time" id="details-timestamp"></span>
+              <div class="details-sender-right">
+                <span class="details-time" id="details-timestamp"></span>
+                <button class="action-icon-btn details-header-star-btn" id="btn-header-star" title="Star email" type="button">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                  </svg>
+                </button>
+                <button class="action-icon-btn details-header-reply-btn" id="btn-header-reply" title="Reply" type="button" style="display: none;">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/>
+                  </svg>
+                </button>
+                <button class="action-icon-btn details-header-forward-btn" id="btn-header-forward" title="Forward" type="button" style="display: none;">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M14 9V5l7 7-7 7v-4.1c-5 0-8.5 1.6-11 5.1 1-5 4-10 11-11z"/>
+                  </svg>
+                </button>
+                <button class="action-icon-btn details-header-delete-btn" id="btn-header-delete" title="Move to Bin" type="button">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                  </svg>
+                </button>
+              </div>
             </div>
             <section class="email-info-panel" id="email-info-panel" hidden aria-label="Message details">
               <dl>
@@ -321,6 +361,29 @@
               <div class="email-tasks-list" id="email-tasks-list">
                 <!-- Inline task cards -->
               </div>
+            </div>
+
+            <!-- Reply, Reply all & Forward Buttons Bar (Gmail-style) -->
+            <div class="details-reply-forward-bar" id="details-reply-forward-bar" style="display: none;">
+              <button type="button" class="btn-detail-action" id="btn-detail-reply" title="Reply">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                  <path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/>
+                </svg>
+                <span>Reply</span>
+              </button>
+              <button type="button" class="btn-detail-action" id="btn-detail-reply-all" title="Reply all" style="display: none;">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                  <path d="M7 8V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/>
+                  <path d="M13 9V6.5L9.5 10l3.5 3.5V11c3.5 0 6 1.1 7.8 3.5-.7-3.5-2.8-7-7.8-7.7z"/>
+                </svg>
+                <span>Reply all</span>
+              </button>
+              <button type="button" class="btn-detail-action" id="btn-detail-forward" title="Forward">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                  <path d="M14 9V5l7 7-7 7v-4.1c-5 0-8.5 1.6-11 5.1 1-5 4-10 11-11z"/>
+                </svg>
+                <span>Forward</span>
+              </button>
             </div>
           </div>
         </div>
@@ -395,6 +458,6 @@
 
   </div>
 
-  <script src="inbox.js?v=8"></script>
+  <script src="inbox.js?v=23"></script>
 </body>
 </html>

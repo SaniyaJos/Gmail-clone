@@ -71,6 +71,7 @@ async function removeUnreferencedAttachments(storageNames) {
 }
 
 module.exports = {
+  STORAGE_NAME_PATTERN,
   getAttachmentPath,
   saveUploadedFiles,
   removeUnreferencedAttachments

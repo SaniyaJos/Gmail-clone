@@ -97,6 +97,20 @@ const emailSchema = new mongoose.Schema({
   spamScore: {
     type: Number,
     default: 0
+  },
+
+  // ---- Conversation Threading ----
+  // Shared thread ID across all replies in a conversation
+  threadId: {
+    type: mongoose.Schema.Types.ObjectId,
+    index: true,
+    default: null
+  },
+  // Parent email ID that this email replied to
+  inReplyTo: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Email',
+    default: null
   }
 });
 
@@ -104,5 +118,6 @@ const emailSchema = new mongoose.Schema({
 emailSchema.index({ owner: 1, isSpam: 1, isTrash: 1 });
 emailSchema.index({ isTrash: 1, trashedAt: 1 });
 emailSchema.index({ isSpam: 1, spamAt: 1 });
+emailSchema.index({ owner: 1, threadId: 1, timestamp: 1 });
 
 module.exports = mongoose.model('Email', emailSchema);
