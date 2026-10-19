@@ -1078,6 +1078,22 @@ body {
 .action-bar-icon-img {
   width: 18px;
   height: 18px;
+  transition: transform 0.2s ease;
+}
+
+/* Gmail-style Refresh Spin Animation */
+@keyframes refresh-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.action-icon-btn.refreshing .action-bar-icon-img {
+  animation: refresh-spin 0.75s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
 }
 
 /* Hover effects for buttons containing SVGs */

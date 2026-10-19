@@ -2068,6 +2068,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Show number of unread emails in inbox badge even when another folder is open
+  async function refreshInboxBadge() {
+    try {
+      const response = await fetch(`${API_BASE}/emails?email=${encodeURIComponent(userEmail)}&folder=inbox`);
+      if (!response.ok) return;
+      const emails = await response.json();
+      const unreadCount = emails.filter(m => !m.isRead).length;
+      const inboxBadge = document.getElementById('badge-inbox');
+      if (inboxBadge) {
+        inboxBadge.textContent = unreadCount > 0 ? unreadCount : '';
+      }
+    } catch (err) {
+      console.error('Error refreshing inbox badge:', err);
+    }
+  }
+
   // ==========================================
   // 10. TOOLBAR & FOLDER NAVIGATION
   // ==========================================
@@ -2107,9 +2123,39 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Refresh toolbar button
-  refreshActionBarBtn.addEventListener('click', () => {
-    fetchEmails(activeFolder);
+  // Refresh toolbar button with Gmail-style smooth spin and multi-data reload
+  let isRefreshing = false;
+  refreshActionBarBtn.addEventListener('click', async () => {
+    if (isRefreshing) return;
+    isRefreshing = true;
+
+    refreshActionBarBtn.classList.add('refreshing');
+    refreshActionBarBtn.setAttribute('title', 'Refreshing...');
+    refreshActionBarBtn.setAttribute('aria-busy', 'true');
+
+    // Reset selection checkboxes
+    selectAllCheckbox.checked = false;
+    selectedEmailIds.clear();
+    updateDeleteButtonState();
+
+    try {
+      // Reload current folder emails and all sidebar badges with a minimum spin time for smooth feel
+      await Promise.all([
+        fetchEmails(activeFolder),
+        refreshInboxBadge(),
+        refreshDraftBadge(),
+        refreshSpamBadge(),
+        refreshActionsBadge(),
+        new Promise(resolve => setTimeout(resolve, 600))
+      ]);
+    } catch (err) {
+      console.error('Error during refresh:', err);
+    } finally {
+      refreshActionBarBtn.classList.remove('refreshing');
+      refreshActionBarBtn.setAttribute('title', 'Refresh');
+      refreshActionBarBtn.removeAttribute('aria-busy');
+      isRefreshing = false;
+    }
   });
 
   // Select all checkboxes toggle
@@ -2421,6 +2467,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 12. APP INITIALIZATION
   // ==========================================
   fetchEmails(activeFolder);
+  refreshInboxBadge();
   refreshActionsBadge();
   refreshSpamBadge();
   updateDeleteButtonState(); // sets the initial visibility of Report spam / Not spam buttons
