@@ -10,6 +10,7 @@ A web-based Gmail Clone built with HTML, CSS, JavaScript, Node.js, Express, and 
 - Spam Detection: rule-based spam filter, Spam folder with unread count, Report spam / Not spam actions
 - Auto-Delete: Bin and Spam emails are permanently deleted after 30 days (backend cleanup job), plus an "Empty Bin now" button
 - Email attachments with private storage, authenticated downloads, and message details
+- User-owned custom labels with persistent email associations, bulk actions, and label filtering
 
 ## Project Structure
 ```text
@@ -70,6 +71,18 @@ Gmail/
 - Uploads are limited to 10 files per draft, with a maximum of 10 MB per file. Allowed types are common JPEG/PNG/GIF/WebP images, PDF, plain text, CSV, ZIP, and Microsoft Word/Excel/PowerPoint documents. The backend checks both the supplied MIME type and filename extension; it does not claim to inspect or verify file contents.
 - Image previews and downloads require a valid bearer token and an email record owned by that signed-in account. Tokens are issued by `/api/signin` and expire after eight hours.
 - Attachments stay with drafts, are copied to sent and recipient email records when sent, and are removed from disk when no email record references them. Image previews are limited to JPEG, PNG, GIF, and WebP.
+
+## Custom Labels
+
+Create, rename, and delete labels from the inbox sidebar. Labels are private to the signed-in account; label API requests require the bearer token returned by `/api/signin`. Names are trimmed, whitespace-normalized, limited to 50 characters, and unique per account without regard to case.
+
+- `GET /api/labels` and `POST /api/labels` (JSON body: `{ "name": "Work" }`)
+- `PATCH /api/labels/:labelId` (JSON body: `{ "name": "Projects" }`) and `DELETE /api/labels/:labelId`
+- `PATCH /api/emails/:emailId/labels` and `PATCH /api/emails/bulk-labels` (JSON body: `{ "emailIds": ["..."], "labelId": "...", "action": "apply" }`; use `"remove"` to remove associations)
+- Filter the existing email listing with `GET /api/emails?labelId=:labelId&folder=all`; include the signed-in user's bearer token. Existing folder and search query parameters can be used alongside the label filter.
+
+Deleting a label removes its email associations but never deletes emails.
+Existing email records remain compatible: the new `labels` array is optional and starts empty.
 
 ### Postman smoke test
 

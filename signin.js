@@ -107,6 +107,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (response.ok) {
         // Save logged-in user details to localStorage
         localStorage.setItem('currentUser', JSON.stringify(data.user));
+        if (typeof window.applyInboxFlowThemeForUser === 'function') {
+          window.applyInboxFlowThemeForUser(data.user.email);
+        }
 
         alert(`Welcome back, ${data.user.firstName}! Connecting to your inbox...`);
         window.location.href = 'inbox.html';

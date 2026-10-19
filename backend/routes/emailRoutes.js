@@ -3,6 +3,7 @@ const emailController = require('../controllers/emailController');
 const attachmentController = require('../controllers/attachmentController');
 const { requireAuth, requireTokenAuth } = require('../middleware/authMiddleware');
 const { receiveAttachments } = require('../middleware/attachmentUpload');
+const labelController = require('../controllers/labelController');
 
 const router = express.Router();
 
@@ -13,10 +14,15 @@ router.get('/:id/attachments/:attachmentId/download', requireTokenAuth, attachme
 router.get('/:id/attachments/:attachmentId/preview', requireTokenAuth, attachmentController.previewAttachment);
 router.delete('/:id/attachments/:attachmentId', requireTokenAuth, attachmentController.removeDraftAttachment);
 router.get('/starred', emailController.getStarredEmails);
+router.patch('/bulk-labels', requireTokenAuth, labelController.updateEmailLabels);
+router.patch('/:emailId/labels', requireTokenAuth, labelController.updateEmailLabels);
 router.get('/counts', requireAuth, emailController.getFolderCounts);
 router.get('/:id/thread', requireAuth, emailController.getEmailThread);
 router.get('/:id', requireAuth, emailController.getEmailById);
-router.get('/', emailController.getEmails);
+router.get('/', (req, res, next) => {
+  if (req.query.labelId) return requireTokenAuth(req, res, next);
+  return next();
+}, emailController.getEmails);
 router.delete('/folder/:folder/empty', requireAuth, emailController.emptyFolder);
 router.patch('/:id/star', emailController.starEmail);
 router.patch('/:id/unstar', emailController.unstarEmail);

@@ -48,6 +48,10 @@ const emailSchema = new mongoose.Schema({
       required: true
     }
   }],
+  labels: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Label'
+  }],
   timestamp: {
     type: Date,
     default: Date.now
@@ -125,5 +129,6 @@ emailSchema.index({ owner: 1, isSpam: 1, isTrash: 1 });
 emailSchema.index({ isTrash: 1, trashedAt: 1 });
 emailSchema.index({ isSpam: 1, spamAt: 1 });
 emailSchema.index({ owner: 1, threadId: 1, timestamp: 1 });
+emailSchema.index({ owner: 1, labels: 1, timestamp: -1 });
 
 module.exports = mongoose.model('Email', emailSchema);

@@ -80,6 +80,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const API_BASE = 'http://localhost:5000/api';
 
   let activeFolder = 'inbox';
+  let activeLabelId = null;
+  let customLabels = [];
   let activeSearchQuery = '';
   let searchDebounceTimer;
   let emailFetchSequence = 0;
@@ -134,6 +136,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const mailListWrapper = document.getElementById('mail-list-wrapper');
   const emailListUl = document.getElementById('email-list');
   const mailCountRange = document.getElementById('mail-count-range');
+  const customLabelList = document.getElementById('custom-label-list');
+  const createLabelButton = document.getElementById('create-label-button');
+  const labelFeedback = document.getElementById('label-feedback');
+  const bulkLabelActions = document.getElementById('bulk-label-actions');
+  const bulkLabelSelect = document.getElementById('bulk-label-select');
+  const bulkLabelApply = document.getElementById('bulk-label-apply');
+  const bulkLabelRemove = document.getElementById('bulk-label-remove');
+  const emailLabelChips = document.getElementById('email-label-chips');
+  const emailLabelOptions = document.getElementById('email-label-options');
+  const emailLabelPicker = document.getElementById('email-label-picker');
 
   // Toolbar Action Controls
   const selectAllCheckbox = document.getElementById('select-all');
@@ -250,6 +262,216 @@ document.addEventListener('DOMContentLoaded', () => {
   // 4. API SERVICE HELPERS
   // ==========================================
 
+  function setLabelFeedback(message, isError = false) {
+    labelFeedback.textContent = message;
+    labelFeedback.classList.toggle('is-error', isError);
+  }
+
+  async function labelRequest(url, options = {}) {
+    const response = await fetch(url, {
+      ...options,
+      headers: tokenHeaders(options.headers || {})
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.message || 'The label operation could not be completed.');
+    }
+    return data;
+  }
+
+  function renderLabelSidebar() {
+    customLabelList.innerHTML = customLabels.map(label => `
+      <div class="custom-label-item ${label._id === activeLabelId ? 'active' : ''}" data-label-item="${label._id}">
+        <button type="button" class="custom-label-select" data-select-label="${label._id}" title="${escapeHtml(label.name)}">
+          <span aria-hidden="true">◆</span>&nbsp;<span>${escapeHtml(label.name)}</span>
+        </button>
+        <button type="button" class="custom-label-edit" data-rename-label="${label._id}" aria-label="Rename ${escapeHtml(label.name)}" title="Rename">✎</button>
+        <button type="button" class="custom-label-delete" data-delete-label="${label._id}" aria-label="Delete ${escapeHtml(label.name)}" title="Delete">×</button>
+      </div>
+    `).join('');
+    if (!customLabels.length && !labelFeedback.textContent) {
+      customLabelList.innerHTML = '<div class="label-feedback">Create a label to organize mail.</div>';
+    }
+
+    bulkLabelSelect.innerHTML = '<option value="">Choose label</option>' + customLabels
+      .map(label => `<option value="${label._id}">${escapeHtml(label.name)}</option>`).join('');
+    renderEmailLabelOptions();
+  }
+
+  async function loadLabels() {
+    try {
+      customLabels = await labelRequest(`${API_BASE}/labels`);
+      if (activeLabelId && !customLabels.some(label => label._id === activeLabelId)) {
+        activeLabelId = null;
+      }
+      renderLabelSidebar();
+      if (currentOpenEmail) renderEmailLabelOptions();
+    } catch (err) {
+      console.error('Error loading labels:', err);
+      setLabelFeedback(err.message, true);
+    }
+  }
+
+  async function changeEmailLabels(emailIds, labelId, action) {
+    await labelRequest(`${API_BASE}/emails/bulk-labels`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emailIds, labelId, action })
+    });
+    await fetchEmails(activeFolder);
+  }
+
+  function renderEmailLabelOptions() {
+    if (!emailLabelOptions) return;
+    if (!customLabels.length) {
+      emailLabelOptions.innerHTML = '<span class="label-feedback">Create a label in the sidebar first.</span>';
+      return;
+    }
+    const emailLabelIds = new Set((currentOpenEmail?.labels || []).map(id => String(id)));
+    emailLabelOptions.innerHTML = customLabels.map(label => `
+      <label class="email-label-option">
+        <input type="checkbox" data-email-label="${label._id}" ${emailLabelIds.has(label._id) ? 'checked' : ''}>
+        <span>${escapeHtml(label.name)}</span>
+      </label>
+    `).join('');
+  }
+
+  function renderEmailLabelChips(email) {
+    const ids = new Set((email.labels || []).map(id => String(id)));
+    emailLabelChips.innerHTML = customLabels
+      .filter(label => ids.has(label._id))
+      .map(label => `<span class="custom-label-chip">${escapeHtml(label.name)}</span>`)
+      .join('');
+  }
+
+  createLabelButton.addEventListener('click', async () => {
+    const name = prompt('Enter a name for the new label:');
+    if (name === null) return;
+    try {
+      await labelRequest(`${API_BASE}/labels`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      setLabelFeedback('Label created.');
+      await loadLabels();
+    } catch (err) {
+      setLabelFeedback(err.message, true);
+    }
+  });
+
+  customLabelList.addEventListener('click', async event => {
+    const selectButton = event.target.closest('[data-select-label]');
+    const renameButton = event.target.closest('[data-rename-label]');
+    const deleteButton = event.target.closest('[data-delete-label]');
+
+    if (selectButton) {
+      activeLabelId = selectButton.dataset.selectLabel;
+      activeFolder = 'all';
+      document.querySelectorAll('.nav-item').forEach(nav => nav.classList.toggle('active', nav.dataset.folder === 'all'));
+      renderLabelSidebar();
+      selectedEmailIds.clear();
+      selectAllCheckbox.checked = false;
+      updateDeleteButtonState();
+      closeDetailsModal();
+      fetchEmails(activeFolder);
+      sidebar.classList.remove('open');
+      return;
+    }
+
+    const labelId = renameButton?.dataset.renameLabel || deleteButton?.dataset.deleteLabel;
+    const label = customLabels.find(item => item._id === labelId);
+    if (!label) return;
+
+    if (renameButton) {
+      const name = prompt('Rename this label:', label.name);
+      if (name === null) return;
+      try {
+        await labelRequest(`${API_BASE}/labels/${labelId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+        setLabelFeedback('Label renamed.');
+        await loadLabels();
+        loadLabels().then(() => fetchEmails(activeFolder));
+      } catch (err) {
+        setLabelFeedback(err.message, true);
+      }
+      return;
+    }
+
+    if (deleteButton && confirm(`Delete the "${label.name}" label? Emails will not be deleted.`)) {
+      try {
+        await labelRequest(`${API_BASE}/labels/${labelId}`, { method: 'DELETE' });
+        if (activeLabelId === labelId) {
+          activeLabelId = null;
+          activeFolder = 'inbox';
+          document.querySelectorAll('.nav-item').forEach(nav => nav.classList.toggle('active', nav.dataset.folder === 'inbox'));
+        }
+        setLabelFeedback('Label deleted.');
+        await loadLabels();
+        fetchEmails(activeFolder);
+      } catch (err) {
+        setLabelFeedback(err.message, true);
+      }
+    }
+  });
+
+  emailLabelOptions.addEventListener('change', async event => {
+    const checkbox = event.target.closest('[data-email-label]');
+    if (!checkbox || !currentOpenEmail) return;
+    const labelId = checkbox.dataset.emailLabel;
+    const action = checkbox.checked ? 'apply' : 'remove';
+    checkbox.disabled = true;
+    try {
+      await changeEmailLabels([currentOpenEmail._id], labelId, action);
+      const labels = new Set((currentOpenEmail.labels || []).map(id => String(id)));
+      if (action === 'apply') labels.add(labelId);
+      else labels.delete(labelId);
+      currentOpenEmail.labels = [...labels];
+      renderEmailLabelChips(currentOpenEmail);
+      setLabelFeedback(`Label ${action === 'apply' ? 'applied' : 'removed'}.`);
+    } catch (err) {
+      checkbox.checked = !checkbox.checked;
+      setLabelFeedback(err.message, true);
+    } finally {
+      checkbox.disabled = false;
+    }
+  });
+
+  bulkLabelSelect.addEventListener('change', () => {
+    const disabled = !bulkLabelSelect.value || selectedEmailIds.size === 0;
+    bulkLabelApply.disabled = disabled;
+    bulkLabelRemove.disabled = disabled;
+  });
+
+  bulkLabelApply.addEventListener('click', async () => {
+    if (!bulkLabelSelect.value || !selectedEmailIds.size) return;
+    try {
+      await changeEmailLabels([...selectedEmailIds], bulkLabelSelect.value, 'apply');
+      selectedEmailIds.clear();
+      selectAllCheckbox.checked = false;
+      updateDeleteButtonState();
+      setLabelFeedback('Label applied to selected messages.');
+    } catch (err) {
+      setLabelFeedback(err.message, true);
+    }
+  });
+
+  bulkLabelRemove.addEventListener('click', async () => {
+    if (!bulkLabelSelect.value || !selectedEmailIds.size) return;
+    try {
+      await changeEmailLabels([...selectedEmailIds], bulkLabelSelect.value, 'remove');
+      selectedEmailIds.clear();
+      selectAllCheckbox.checked = false;
+      updateDeleteButtonState();
+      setLabelFeedback('Label removed from selected messages.');
+    } catch (err) {
+      setLabelFeedback(err.message, true);
+    }
+  });
+
   // Fetch emails from server based on folder and search query
   async function fetchEmails(folder) {
     // If My Actions folder selected, show dedicated Action Engine dashboard
@@ -275,7 +497,10 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const params = new URLSearchParams({ email: userEmail, folder });
       if (activeSearchQuery) params.set('q', activeSearchQuery);
-      const response = await fetch(`${API_BASE}/emails?${params}`);
+      if (activeLabelId) params.set('labelId', activeLabelId);
+      const response = await fetch(`${API_BASE}/emails?${params}`, {
+        headers: activeLabelId ? tokenHeaders() : {}
+      });
       if (!response.ok) {
         throw new Error('Failed to retrieve emails');
       }
@@ -601,6 +826,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       return {
         ...latest,
+        labels: [...new Set(threadList.flatMap(message => (message.labels || []).map(id => String(id))))],
         displaySenderHtml,
         displaySubject: cleanSubject,
         displaySnippet: cleanSnippet.slice(0, 100),
@@ -711,6 +937,9 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="email-content">
           <span class="email-subject">${escapeHtml(email.displaySubject || email.subject)}</span>
           <span class="email-snippet">— ${escapeHtml(email.displaySnippet !== undefined ? email.displaySnippet : email.body.substring(0, 80))}</span>
+          <span class="email-row-labels">${customLabels
+            .filter(label => (email.labels || []).some(id => String(id) === label._id))
+            .map(label => `<span class="custom-label-chip">${escapeHtml(label.name)}</span>`).join('')}</span>
           ${expiryHtml}
         </div>
         <div class="email-date">${formattedDate}</div>
@@ -848,6 +1077,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Open Details panel overlay
   async function openEmailDetails(email) {
     currentOpenEmail = email;
+    emailLabelPicker.open = false;
+    renderEmailLabelChips(email);
+    renderEmailLabelOptions();
     emailDetailsModal.style.display = 'flex';
     emailInfoPanel.hidden = true;
     emailInfoToggle.setAttribute('aria-expanded', 'false');
@@ -3361,6 +3593,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // Clear selections
       selectedEmailIds.clear();
       selectAllCheckbox.checked = false;
+      activeLabelId = null;
+      renderLabelSidebar();
 
       // Toggle active states
       navItems.forEach(nav => nav.classList.remove('active'));
@@ -3557,6 +3791,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Enable/disable toolbar action buttons based on selection and folder
   function updateDeleteButtonState() {
     const hasSelection = selectedEmailIds.size > 0;
+    bulkLabelActions.hidden = !hasSelection || customLabels.length === 0;
+    const labelActionsDisabled = !hasSelection || !bulkLabelSelect.value;
+    bulkLabelApply.disabled = labelActionsDisabled;
+    bulkLabelRemove.disabled = labelActionsDisabled;
     if (hasSelection) {
       deleteActionBarBtn.removeAttribute('disabled');
     } else {
@@ -3643,7 +3881,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const subtitle = emptyStateView.querySelector('.empty-subtitle');
 
     let state;
-    if (searching) {
+    if (activeLabelId && !searching) {
+      const label = customLabels.find(item => item._id === activeLabelId);
+      state = {
+        icon: 'inbox',
+        title: 'No messages with this label',
+        subtitle: label ? `Messages with "${label.name}" will appear here.` : 'This label has no messages yet.'
+      };
+    } else if (searching) {
       state = {
         icon: 'search',
         title: 'No matching messages',

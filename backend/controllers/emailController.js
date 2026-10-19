@@ -4,6 +4,7 @@
 
 const mongoose = require('mongoose');
 const Email = require('../models/Email');
+const Label = require('../models/Label');
 const User = require('../models/User');
 const { classifyIncoming, rememberSenderDecision } = require('../services/spamService');
 const { RETENTION_DAYS } = require('../services/cleanupService');
@@ -279,17 +280,27 @@ function buildEmailSearchFilter(queryEmail, folder, searchQuery) {
 
 async function getEmails(req, res) {
   try {
-    const { email, folder, q } = req.query;
+    const { email, folder, q, labelId } = req.query;
 
-    if (!email) {
+    if (!email && !labelId) {
       return res.status(400).json({ message: 'User email query parameter is required' });
     }
 
-    const queryEmail = email.toLowerCase();
+    if (labelId && !mongoose.isValidObjectId(labelId)) {
+      return res.status(400).json({ message: 'Invalid label ID' });
+    }
+    const queryEmail = labelId ? req.user.email : email.toLowerCase();
+    if (labelId) {
+      const label = await Label.findOne({ _id: labelId, owner: queryEmail }).select('_id').lean();
+      if (!label) return res.status(404).json({ message: 'Label not found' });
+    }
     const filter = { owner: queryEmail };
+    if (labelId) filter.labels = labelId;
 
     if (typeof q === 'string' && q.trim()) {
-      const emails = await Email.find(buildEmailSearchFilter(queryEmail, folder, q.trim()))
+      const searchFilter = buildEmailSearchFilter(queryEmail, folder, q.trim());
+      if (labelId) searchFilter.labels = labelId;
+      const emails = await Email.find(searchFilter)
         .sort({ timestamp: -1 })
         .lean();
       return res.status(200).json(addExpiryInfo(await addSenderNames(emails), folder));

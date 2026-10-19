@@ -4,7 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>InboxFlow - Inbox</title>
+  <script src="theme.js"></script>
   <link rel="stylesheet" href="inbox.css?v=17">
+  <link rel="stylesheet" href="theme.css">
   <!-- Google Fonts: Roboto and Outfit -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -65,6 +67,10 @@
       <div class="dropdown-name" id="dropdown-name">User Name</div>
       <div class="dropdown-email" id="dropdown-email">user@flow.com</div>
       <div class="dropdown-divider"></div>
+      <button type="button" class="theme-toggle account-theme-toggle" aria-label="Switch to dark mode" aria-pressed="false">
+        <svg class="theme-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"></svg>
+        <span class="theme-toggle-label">Light mode</span>
+      </button>
       <button class="btn-dropdown-logout" id="btn-dropdown-logout">Sign out</button>
     </div>
 
@@ -124,6 +130,14 @@
             <span class="nav-label">All Mail</span>
           </a>
         </nav>
+        <section class="custom-label-section" aria-labelledby="custom-label-heading">
+          <div class="custom-label-heading">
+            <span id="custom-label-heading">Labels</span>
+            <button type="button" class="custom-label-add" id="create-label-button" aria-label="Create label" title="Create label">+</button>
+          </div>
+          <div id="custom-label-list" class="custom-label-list" aria-live="polite"></div>
+          <div id="label-feedback" class="label-feedback" role="status" aria-live="polite"></div>
+        </section>
       </aside>
 
       <!-- Main Mail Panel -->
@@ -150,6 +164,13 @@
             <button class="action-icon-btn" id="action-refresh" title="Refresh">
               <img src="images/rotate-right-solid-full.svg" alt="Refresh" class="action-bar-icon-img">
             </button>
+            <div class="bulk-label-actions" id="bulk-label-actions" hidden>
+              <select id="bulk-label-select" aria-label="Choose label">
+                <option value="">Choose label</option>
+              </select>
+              <button type="button" id="bulk-label-apply" disabled>Apply</button>
+              <button type="button" id="bulk-label-remove" disabled>Remove</button>
+            </div>
           </div>
           <div class="action-right">
             <span class="mail-count-info" id="mail-count-range">0-0 of 0</span>
@@ -275,6 +296,9 @@
                 <img src="images/star-regular-full.svg" alt="" class="details-star-icon">
               </button>
             </div>
+            <section class="email-labels-panel" id="email-labels-panel" aria-label="Email labels">
+              <div class="email-label-chips" id="email-label-chips"></div>
+            </section>
 
             <!-- Deleted Messages in Conversation Banner (Gmail-style) -->
             <div class="thread-deleted-banner" id="thread-deleted-banner" style="display: none;">
@@ -310,6 +334,12 @@
               </div>
               <div class="details-sender-right">
                 <span class="details-time" id="details-timestamp"></span>
+                <details class="email-label-picker" id="email-label-picker">
+                  <summary aria-label="Manage labels" title="Manage labels">
+                    <img src="images/label-outline.svg" alt="">
+                  </summary>
+                  <div class="email-label-options" id="email-label-options"></div>
+                </details>
                 <button class="action-icon-btn details-header-star-btn" id="btn-header-star" title="Star email" type="button">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                     <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
