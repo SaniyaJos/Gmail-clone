@@ -323,6 +323,98 @@ document.addEventListener('DOMContentLoaded', () => {
     return updateEmailStatus(id, { isTrash: false });
   }
 
+  // ==========================================
+  // TOAST / SNACKBAR NOTIFICATION WITH UNDO
+  // ==========================================
+  const toastSnackbar = document.getElementById('toast-snackbar');
+  const toastMessage = document.getElementById('toast-message');
+  const toastActionBtn = document.getElementById('toast-action-btn');
+  const toastCloseBtn = document.getElementById('toast-close-btn');
+  let toastTimer = null;
+  let activeUndoHandler = null;
+
+  function showToast({ message, actionText = 'Undo', onAction = null, duration = 8000 }) {
+    if (!toastSnackbar) return;
+    if (toastTimer) clearTimeout(toastTimer);
+
+    if (toastMessage) toastMessage.textContent = message;
+
+    if (onAction && typeof onAction === 'function') {
+      if (toastActionBtn) {
+        toastActionBtn.textContent = actionText;
+        toastActionBtn.style.display = 'inline-block';
+      }
+      activeUndoHandler = onAction;
+    } else {
+      if (toastActionBtn) toastActionBtn.style.display = 'none';
+      activeUndoHandler = null;
+    }
+
+    toastSnackbar.style.display = 'flex';
+
+    if (duration > 0) {
+      toastTimer = setTimeout(() => {
+        hideToast();
+      }, duration);
+    }
+  }
+
+  function hideToast() {
+    if (!toastSnackbar) return;
+    if (toastTimer) clearTimeout(toastTimer);
+    toastSnackbar.style.display = 'none';
+    activeUndoHandler = null;
+  }
+
+  if (toastActionBtn) {
+    toastActionBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (activeUndoHandler) {
+        const handler = activeUndoHandler;
+        hideToast();
+        await handler();
+      }
+    });
+  }
+
+  if (toastCloseBtn) {
+    toastCloseBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hideToast();
+    });
+  }
+
+  // Move email(s) to Bin with an Undo toast (Gmail style)
+  async function moveEmailsToBin(emailIds, customMessage = null) {
+    const ids = Array.isArray(emailIds) ? emailIds : [emailIds];
+    if (ids.length === 0) return;
+
+    for (const id of ids) {
+      await updateEmailStatus(id, { isTrash: true });
+    }
+    fetchEmails(activeFolder);
+
+    const message = customMessage || (ids.length > 1
+      ? `${ids.length} conversations moved to Bin.`
+      : 'Conversation moved to Bin.');
+
+    showToast({
+      message,
+      actionText: 'Undo',
+      duration: 8000,
+      onAction: async () => {
+        for (const id of ids) {
+          await updateEmailStatus(id, { isTrash: false });
+        }
+        fetchEmails(activeFolder);
+        if (emailDetailsModal && emailDetailsModal.style.display === 'flex' && currentOpenEmail) {
+          await loadAndRenderThread(currentOpenEmail);
+        }
+        showToast({ message: 'Action undone.', duration: 4000 });
+      }
+    });
+  }
+
   // Bin and Spam both delete forever (every other folder moves to Bin)
   function isPermanentDeleteFolder() {
     return activeFolder === 'bin' || activeFolder === 'spam';
@@ -678,10 +770,7 @@ document.addEventListener('DOMContentLoaded', () => {
             fetchEmails(activeFolder);
           }
         } else {
-          for (const id of targetIds) {
-            await updateEmailStatus(id, { isTrash: true });
-          }
-          fetchEmails(activeFolder);
+          await moveEmailsToBin(targetIds);
         }
       });
 
@@ -1667,11 +1756,8 @@ document.addEventListener('DOMContentLoaded', () => {
           ? currentThreadActiveEmails.map(e => e._id)
           : (currentThreadEmails && currentThreadEmails.length > 0 ? currentThreadEmails.map(e => e._id) : [currentOpenEmail._id]);
       }
-      for (const id of ids) {
-        await updateEmailStatus(id, { isTrash: true });
-      }
       closeDetailsModal();
-      fetchEmails(activeFolder);
+      await moveEmailsToBin(ids);
     }
   });
 
@@ -2277,10 +2363,23 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (response.ok) {
+          const data = await response.json().catch(() => ({}));
+          const sentEmail = data.email;
+
           if (currentDraftId) {
             await deleteEmailPermanently(currentDraftId);
           }
-          alert('Email sent successfully!');
+
+          // Snapshot previous compose data for potential Undo
+          const undoContext = {
+            recipients: [...recipientEmails],
+            subject: finalSubject,
+            body,
+            attachments: [...composeAttachments],
+            threadId: activeThreadId,
+            inReplyTo: activeInReplyTo
+          };
+
           closeComposeModal();
 
           if (emailDetailsModal.style.display === 'flex' && currentOpenEmail) {
@@ -2289,6 +2388,61 @@ document.addEventListener('DOMContentLoaded', () => {
           fetchEmails(activeFolder);
           activeThreadId = null;
           activeInReplyTo = null;
+
+          if (sentEmail && sentEmail._id) {
+            showToast({
+              message: 'Message sent',
+              actionText: 'Undo',
+              duration: 8000,
+              onAction: async () => {
+                try {
+                  const undoRes = await fetch(`${API_BASE}/emails/${sentEmail._id}/undo-send`, {
+                    method: 'POST',
+                    headers: tokenHeaders({ 'Content-Type': 'application/json' })
+                  });
+                  if (!undoRes.ok) {
+                    const errData = await undoRes.json().catch(() => ({}));
+                    showToast({ message: errData.message || 'Could not undo send.', duration: 4000 });
+                    return;
+                  }
+                  const undoData = await undoRes.json();
+                  const draftEmail = undoData.email;
+
+                  // Restore compose modal with the saved draft email content
+                  currentDraftId = draftEmail._id;
+                  activeThreadId = undoContext.threadId || null;
+                  activeInReplyTo = undoContext.inReplyTo || null;
+                  composeAttachments = Array.isArray(draftEmail.attachments) ? [...draftEmail.attachments] : [];
+                  renderComposeAttachments();
+
+                  // Restore recipients
+                  if (chipsContainer) {
+                    chipsContainer.querySelectorAll('.recipient-chip').forEach(chip => chip.remove());
+                  }
+                  undoContext.recipients.forEach(r => addRecipientChip(r));
+
+                  emailSubjectInput.value = undoContext.subject === '(No Subject)' ? '' : undoContext.subject;
+                  emailBodyInput.value = undoContext.body || '';
+
+                  if (composeModalTitle) composeModalTitle.textContent = 'Edit Message';
+                  composeModal.classList.remove('maximized', 'minimized');
+                  composeModal.style.display = 'flex';
+                  emailBodyInput.focus();
+
+                  // Refresh folder list to remove from Sent / threads
+                  fetchEmails(activeFolder);
+                  if (emailDetailsModal.style.display === 'flex' && currentOpenEmail) {
+                    await loadAndRenderThread(currentOpenEmail);
+                  }
+
+                  showToast({ message: 'Sending undone.', duration: 4000 });
+                } catch (err) {
+                  console.error('Error undoing send:', err);
+                  showToast({ message: 'Could not undo send. Please try again.', duration: 4000 });
+                }
+              }
+            });
+          }
         } else {
           const data = await response.json().catch(() => ({}));
           alert(data.message || 'Could not send email. Please try again.');
@@ -2724,9 +2878,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 fetchEmails(activeFolder);
               }
             } else {
-              await updateEmailStatus(email._id, { isTrash: true });
+              await moveEmailsToBin([email._id], 'Message moved to Bin.');
               await loadAndRenderThread(currentOpenEmail);
-              fetchEmails(activeFolder);
             }
           });
 
@@ -3039,14 +3192,14 @@ document.addEventListener('DOMContentLoaded', () => {
           fetchEmails(activeFolder);
         }
       } else {
-        await updateEmailStatus(target._id, { isTrash: true });
         const remainingActive = (currentThreadActiveEmails || []).filter(e => e._id !== target._id);
         if (remainingActive.length > 0) {
+          await moveEmailsToBin([target._id], 'Message moved to Bin.');
           await loadAndRenderThread(remainingActive[remainingActive.length - 1]);
         } else {
           closeDetailsModal();
+          await moveEmailsToBin([target._id]);
         }
-        fetchEmails(activeFolder);
       }
     });
   }
@@ -3213,23 +3366,22 @@ document.addEventListener('DOMContentLoaded', () => {
   deleteActionBarBtn.addEventListener('click', async () => {
     if (selectedEmailIds.size === 0) return;
 
-    const confirmationMessage = isPermanentDeleteFolder()
-      ? `Permanently delete ${selectedEmailIds.size} email(s)?`
-      : `Move ${selectedEmailIds.size} email(s) to Bin?`;
-    if (confirm(confirmationMessage)) {
-      const promises = Array.from(selectedEmailIds).map(id => {
-        if (isPermanentDeleteFolder()) {
-          return deleteEmailPermanently(id);
-        } else {
-          return updateEmailStatus(id, { isTrash: true });
+    if (isPermanentDeleteFolder()) {
+      if (confirm(`Permanently delete ${selectedEmailIds.size} email(s)?`)) {
+        for (const id of selectedEmailIds) {
+          await deleteEmailPermanently(id);
         }
-      });
-
-      await Promise.all(promises);
+        selectedEmailIds.clear();
+        selectAllCheckbox.checked = false;
+        updateDeleteButtonState();
+        fetchEmails(activeFolder);
+      }
+    } else {
+      const idsToDelete = Array.from(selectedEmailIds);
       selectedEmailIds.clear();
       selectAllCheckbox.checked = false;
       updateDeleteButtonState();
-      fetchEmails(activeFolder);
+      await moveEmailsToBin(idsToDelete);
     }
   });
 

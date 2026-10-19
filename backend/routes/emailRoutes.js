@@ -7,6 +7,7 @@ const { receiveAttachments } = require('../middleware/attachmentUpload');
 const router = express.Router();
 
 router.post('/', requireTokenAuth, emailController.createEmail);
+router.post('/:id/undo-send', requireTokenAuth, emailController.undoSendEmail);
 router.post('/:id/attachments', requireTokenAuth, receiveAttachments, attachmentController.uploadAttachments);
 router.get('/:id/attachments/:attachmentId/download', requireTokenAuth, attachmentController.downloadAttachment);
 router.get('/:id/attachments/:attachmentId/preview', requireTokenAuth, attachmentController.previewAttachment);

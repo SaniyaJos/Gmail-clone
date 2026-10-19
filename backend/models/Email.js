@@ -111,6 +111,12 @@ const emailSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Email',
     default: null
+  },
+  // Batch identifier for recipient copies created during a single send (used for Undo Send)
+  sendGroupId: {
+    type: String,
+    index: true,
+    default: null
   }
 });
 

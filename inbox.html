@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>InboxFlow - Inbox</title>
-  <link rel="stylesheet" href="inbox.css?v=15">
+  <link rel="stylesheet" href="inbox.css?v=16">
   <!-- Google Fonts: Roboto and Outfit -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -456,8 +456,15 @@
       </div>
     </div>
 
+    <!-- Global Undo / Status Toast Notification (Gmail style) -->
+    <div id="toast-snackbar" class="toast-snackbar" style="display: none;" role="status" aria-live="polite">
+      <span class="toast-message" id="toast-message"></span>
+      <button type="button" class="toast-action-btn" id="toast-action-btn" style="display: none;">Undo</button>
+      <button type="button" class="toast-close-btn" id="toast-close-btn" aria-label="Close notification">×</button>
+    </div>
+
   </div>
 
-  <script src="inbox.js?v=23"></script>
+  <script src="inbox.js?v=24"></script>
 </body>
 </html>

@@ -134,10 +134,14 @@ async function createEmail(req, res) {
     }
 
     let conversationThreadId = null;
+    let sendGroupId = null;
     if (req.body.threadId && mongoose.isValidObjectId(req.body.threadId)) {
       conversationThreadId = new mongoose.Types.ObjectId(req.body.threadId);
     } else if (!draftMode) {
       conversationThreadId = new mongoose.Types.ObjectId();
+    }
+    if (!draftMode) {
+      sendGroupId = new mongoose.Types.ObjectId().toString();
     }
 
     const emailData = {
@@ -148,6 +152,7 @@ async function createEmail(req, res) {
       isDraft: draftMode,
       attachments,
       threadId: conversationThreadId,
+      sendGroupId,
       inReplyTo: (req.body.inReplyTo && mongoose.isValidObjectId(req.body.inReplyTo))
         ? new mongoose.Types.ObjectId(req.body.inReplyTo)
         : null
@@ -788,6 +793,68 @@ async function getEmailThread(req, res) {
   }
 }
 
+/**
+ * POST /api/emails/:id/undo-send
+ * Cancels a sent email within a short time window (e.g. 35s max server margin).
+ * Deletes all recipient copies created during this send, and reverts the sender's copy back to draft.
+ */
+async function undoSendEmail(req, res) {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ message: 'Invalid email ID' });
+    }
+
+    const email = await Email.findOne({
+      _id: id,
+      owner: req.user.email,
+      sender: req.user.email,
+      isDraft: false
+    });
+
+    if (!email) {
+      return res.status(404).json({ message: 'Sent email not found or already recalled.' });
+    }
+
+    // Allow undo within 35 seconds of sending
+    const elapsedSeconds = (Date.now() - new Date(email.timestamp).getTime()) / 1000;
+    if (elapsedSeconds > 35) {
+      return res.status(400).json({ message: 'Undo window has expired.' });
+    }
+
+    // Delete recipient copies associated with this send
+    if (email.sendGroupId) {
+      await Email.deleteMany({
+        sendGroupId: email.sendGroupId,
+        owner: { $ne: req.user.email }
+      });
+    } else {
+      // Fallback matching sender, subject, and timestamp within 5 seconds
+      const timeMin = new Date(new Date(email.timestamp).getTime() - 5000);
+      const timeMax = new Date(new Date(email.timestamp).getTime() + 5000);
+      await Email.deleteMany({
+        sender: email.sender,
+        owner: { $ne: req.user.email },
+        subject: email.subject,
+        timestamp: { $gte: timeMin, $lte: timeMax }
+      });
+    }
+
+    // Revert sender copy to draft
+    email.isDraft = true;
+    email.timestamp = new Date();
+    await email.save();
+
+    return res.status(200).json({
+      message: 'Sending undone. Email converted back to draft.',
+      email
+    });
+  } catch (err) {
+    console.error('Undo send email error:', err);
+    return res.status(500).json({ message: 'Internal server error while undoing email send.' });
+  }
+}
+
 module.exports = {
   createEmail,
   getEmails,
@@ -802,5 +869,6 @@ module.exports = {
   markNotSpam,
   emptyFolder,
   getFolderCounts,
-  getEmailThread
+  getEmailThread,
+  undoSendEmail
 };

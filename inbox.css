@@ -2934,3 +2934,101 @@ body {
     width: 72px;
   }
 }
+
+/* ==========================================================================
+   Gmail-Style Floating Toast / Snackbar (Undo Send & Undo Delete)
+   ========================================================================== */
+.toast-snackbar {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 280px;
+  max-width: 480px;
+  padding: 12px 18px;
+  background-color: #202124;
+  color: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px 0 rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15);
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+  animation: toastFadeIn 0.25s cubic-bezier(0, 0, 0.2, 1);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+@keyframes toastFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toast-message {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 400;
+  color: #ffffff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toast-action-btn {
+  border: none;
+  background: transparent;
+  color: #8ab4f8;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  text-transform: capitalize;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.toast-action-btn:hover {
+  background-color: rgba(138, 180, 248, 0.12);
+  color: #aecbfa;
+}
+
+.toast-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: #9aa0a6;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 50%;
+  padding: 0;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.toast-close-btn:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+@media (max-width: 600px) {
+  .toast-snackbar {
+    left: 12px;
+    right: 12px;
+    bottom: 16px;
+    min-width: 0;
+    max-width: none;
+  }
+}
+
