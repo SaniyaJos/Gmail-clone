@@ -13,6 +13,7 @@ require('dotenv').config();
 const User = require('./models/User');
 const emailRoutes = require('./routes/emailRoutes');
 const taskRoutes = require('./routes/taskRoutes');
+const labelRoutes = require('./routes/labelRoutes');
 const { startCleanupScheduler } = require('./services/cleanupService');
 
 // ==========================================
@@ -39,6 +40,7 @@ app.use(cors()); // Allow cross-origin requests from frontend HTML files
 app.use(express.json()); // Parse JSON request bodies
 app.use('/api/emails', emailRoutes); // Mount modular email CRUD & search routes
 app.use('/api/tasks', taskRoutes); // Mount Email-to-Action Engine task routes
+app.use('/api/labels', labelRoutes);
 
 // ==========================================
 // 3. DATABASE CONNECTION

@@ -1,0 +1,508 @@
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-primary-blue: #8ab4f8;
+  --color-light-blue-bg: #28415b;
+  --color-light-blue-hover: #344e69;
+  --color-active-nav-bg: #34465e;
+  --color-hover-nav-bg: #30343a;
+  --color-text-dark: #e8eaed;
+  --color-text-medium: #bdc1c6;
+  --color-text-light: #9aa0a6;
+  --color-border: #454a50;
+  --color-border-light: #383d43;
+  --color-bg-app: #202124;
+  --color-bg-search: #303134;
+  --color-bg-page: #202124;
+  --color-card-bg: #292a2d;
+  --color-primary: #8ab4f8;
+  --color-primary-hover: #aecbfa;
+  --color-border-hover: #9aa0a6;
+  --color-error: #f28b82;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+html[data-theme] body,
+html[data-theme] .app-container,
+html[data-theme] .app-body,
+html[data-theme] .mail-panel,
+html[data-theme] .details-body,
+html[data-theme] .details-header {
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme] *,
+  html[data-theme] *::before,
+  html[data-theme] *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 7px 12px;
+  border: 1px solid #dadce0;
+  border-radius: 20px;
+  background: #fff;
+  color: #3c4043;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.theme-toggle:hover,
+.theme-toggle:focus-visible {
+  background: #f1f3f4;
+}
+
+.theme-toggle:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: 2px;
+}
+
+.theme-toggle-icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.theme-toggle-icon path:first-child {
+  fill: currentColor;
+  stroke: none;
+}
+
+.theme-toggle-label {
+  white-space: nowrap;
+}
+
+.page-theme-toggle {
+  position: fixed;
+  top: 20px;
+  right: 24px;
+  z-index: 1005;
+}
+
+.account-theme-toggle {
+  align-self: stretch;
+  margin: 0 0 10px;
+}
+
+html[data-theme="dark"] body,
+html[data-theme="dark"] .hero-section {
+  background: #202124;
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .header,
+html[data-theme="dark"] .header-container,
+html[data-theme="dark"] .signin-card,
+html[data-theme="dark"] .signup-card,
+html[data-theme="dark"] .hero-image-wrapper {
+  background-color: #292a2d;
+}
+
+html[data-theme="dark"] .header,
+html[data-theme="dark"] .signin-card,
+html[data-theme="dark"] .signup-card {
+  border-color: #454a50;
+}
+
+html[data-theme="dark"] .hero-title,
+html[data-theme="dark"] .card-title,
+html[data-theme="dark"] .logo-text,
+html[data-theme="dark"] .hero-desc,
+html[data-theme="dark"] .card-subtitle,
+html[data-theme="dark"] .input-group label,
+html[data-theme="dark"] .input-group input,
+html[data-theme="dark"] .input-group select {
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .input-group input,
+html[data-theme="dark"] .input-group select {
+  background-color: #202124;
+  border-color: #747b83;
+}
+
+html[data-theme="dark"] .input-group label {
+  background-color: #292a2d;
+}
+
+html[data-theme="dark"] .theme-toggle {
+  border-color: #5f6368;
+  background: #303134;
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .theme-toggle:hover,
+html[data-theme="dark"] .theme-toggle:focus-visible {
+  background: #3c4043;
+}
+
+html[data-theme="dark"] .btn-secondary {
+  background: #303134;
+  color: #a8c7fa;
+  border-color: #5f6368;
+}
+
+html[data-theme="dark"] .btn-secondary:hover {
+  background: #3c4043;
+}
+
+html[data-theme="dark"] .btn-primary {
+  background: #8ab4f8;
+  color: #202124;
+}
+
+html[data-theme="dark"] .btn-primary:hover {
+  background: #aecbfa;
+}
+
+html[data-theme="dark"] .logo-text span:first-child {
+  color: #e8eaed !important;
+}
+
+html[data-theme="dark"] .logo-text span:last-child {
+  color: #8ab4f8 !important;
+}
+
+html[data-theme="dark"] .signin-card,
+html[data-theme="dark"] .signup-card {
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .app-header,
+html[data-theme="dark"] .app-sidebar,
+html[data-theme="dark"] .mail-panel,
+html[data-theme="dark"] .mail-action-bar,
+html[data-theme="dark"] .email-details-modal,
+html[data-theme="dark"] .compose-modal,
+html[data-theme="dark"] .search-filter-panel,
+html[data-theme="dark"] .email-info-panel,
+html[data-theme="dark"] .email-label-options,
+html[data-theme="dark"] .account-dropdown,
+html[data-theme="dark"] .confirm-empty-dialog,
+html[data-theme="dark"] .modal-content,
+html[data-theme="dark"] .actions-panel-view,
+html[data-theme="dark"] .compose-header,
+html[data-theme="dark"] .compose-body,
+html[data-theme="dark"] .modal-header,
+html[data-theme="dark"] .modal-body,
+html[data-theme="dark"] .search-filter-panel,
+html[data-theme="dark"] .email-tasks-section {
+  background-color: #292a2d;
+  color: #e8eaed;
+  border-color: #454a50;
+}
+
+html[data-theme="dark"] .app-container,
+html[data-theme="dark"] .app-body,
+html[data-theme="dark"] .mail-list-container,
+html[data-theme="dark"] .details-body,
+html[data-theme="dark"] .compose-modal-body {
+  background-color: #202124;
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .email-row,
+html[data-theme="dark"] .email-row.unread {
+  background-color: #292a2d;
+  color: #e8eaed;
+  border-color: #383d43;
+}
+
+html[data-theme="dark"] .email-row:hover,
+html[data-theme="dark"] .email-row.read:hover {
+  background-color: #303134;
+}
+
+html[data-theme="dark"] .email-row-actions,
+html[data-theme="dark"] .email-row-actions .action-icon-btn {
+  background-color: #303134;
+}
+
+html[data-theme="dark"] .email-subject,
+html[data-theme="dark"] .email-row.unread .email-subject,
+html[data-theme="dark"] .details-subject,
+html[data-theme="dark"] .sender-name,
+html[data-theme="dark"] .email-info-panel dd,
+html[data-theme="dark"] .email-info-panel dt,
+html[data-theme="dark"] .compose-modal input,
+html[data-theme="dark"] .compose-modal textarea,
+html[data-theme="dark"] .search-bar input,
+html[data-theme="dark"] .search-filter-panel input,
+html[data-theme="dark"] .search-filter-panel label,
+html[data-theme="dark"] .custom-label-chip {
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .email-snippet,
+html[data-theme="dark"] .email-date,
+html[data-theme="dark"] .details-time,
+html[data-theme="dark"] .receiver-email,
+html[data-theme="dark"] .sender-email,
+html[data-theme="dark"] .email-info-panel dt {
+  color: #bdc1c6;
+}
+
+html[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] select,
+html[data-theme="dark"] .search-bar,
+html[data-theme="dark"] .search-filter-panel input {
+  background-color: #202124;
+  color: #e8eaed;
+  border-color: #5f6368;
+}
+
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: #9aa0a6;
+}
+
+html[data-theme="dark"] .action-icon-btn,
+html[data-theme="dark"] .icon-btn,
+html[data-theme="dark"] .btn-text-action,
+html[data-theme="dark"] .email-info-toggle,
+html[data-theme="dark"] .email-label-picker summary,
+html[data-theme="dark"] .custom-label-select,
+html[data-theme="dark"] .custom-label-edit,
+html[data-theme="dark"] .custom-label-delete {
+  color: #bdc1c6;
+}
+
+html[data-theme="dark"] .nav-item {
+  color: #bdc1c6;
+}
+
+html[data-theme="dark"] .nav-item.active,
+html[data-theme="dark"] .custom-label-item.active {
+  color: #d3e3fd;
+}
+
+html[data-theme="dark"] .sidebar-icon,
+html[data-theme="dark"] .header-right-icon,
+html[data-theme="dark"] .search-bar-icon,
+html[data-theme="dark"] .filter-bar-icon,
+html[data-theme="dark"] .action-bar-icon-img,
+html[data-theme="dark"] .row-action-icon-img,
+html[data-theme="dark"] .details-delete-icon,
+html[data-theme="dark"] .compose-btn-icon {
+  filter: brightness(0) invert(.82);
+}
+
+html[data-theme="dark"] .header-avatar-img {
+  filter: brightness(.85);
+}
+
+html[data-theme="dark"] .icon-btn:hover .sidebar-toggle-icon,
+html[data-theme="dark"] .icon-btn:hover .header-right-icon,
+html[data-theme="dark"] .action-icon-btn:hover .action-bar-icon-img,
+html[data-theme="dark"] .action-icon-btn:hover .details-delete-icon {
+  filter: brightness(0) invert(.82);
+}
+
+html[data-theme="dark"] .compose-btn {
+  background-color: #34465e;
+  color: #d3e3fd;
+}
+
+html[data-theme="dark"] .compose-btn:hover {
+  background-color: #405875;
+}
+
+html[data-theme="dark"] .btn-dropdown-logout {
+  background-color: #303134;
+  color: #a8c7fa;
+  border-color: #5f6368;
+}
+
+html[data-theme="dark"] .btn-dropdown-logout:hover {
+  background-color: #3c4043;
+  border-color: #8ab4f8;
+}
+
+html[data-theme="dark"] .custom-label-chip {
+  background-color: #3c4043;
+}
+
+html[data-theme="dark"] .custom-label-item:hover,
+html[data-theme="dark"] .nav-item:hover,
+html[data-theme="dark"] .action-icon-btn:hover,
+html[data-theme="dark"] .icon-btn:hover {
+  background-color: #3c4043;
+}
+
+html[data-theme="dark"] .email-row-select,
+html[data-theme="dark"] .action-checkbox,
+html[data-theme="dark"] .email-label-option input {
+  accent-color: #8ab4f8;
+}
+
+html[data-theme="dark"] .email-label-option,
+html[data-theme="dark"] .empty-title,
+html[data-theme="dark"] .empty-subtitle,
+html[data-theme="dark"] .dropdown-name,
+html[data-theme="dark"] .dropdown-email,
+html[data-theme="dark"] .search-filter-actions,
+html[data-theme="dark"] .folder-banner {
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .email-label-options,
+html[data-theme="dark"] .email-label-picker[open] .email-label-options {
+  background: #303134;
+}
+
+html[data-theme="dark"] .email-attachment-card,
+html[data-theme="dark"] .email-info-panel,
+html[data-theme="dark"] .search-filter-panel,
+html[data-theme="dark"] .email-label-options {
+  border-color: #454a50;
+}
+
+html[data-theme="dark"] .email-attachment-preview,
+html[data-theme="dark"] .attachment-preview-unavailable,
+html[data-theme="dark"] .attachment-file-icon {
+  background-color: #3c4043;
+  color: #a8c7fa;
+}
+
+html[data-theme="dark"] .thread-deleted-banner,
+html[data-theme="dark"] .email-label-picker summary:hover {
+  background-color: #3c4043;
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .details-content {
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .empty-icon {
+  color: #9aa0a6;
+}
+
+html[data-theme="dark"] .confirm-dialog,
+html[data-theme="dark"] .modal-header,
+html[data-theme="dark"] .modal-body,
+html[data-theme="dark"] .compose-modal-header,
+html[data-theme="dark"] .confirm-dialog-card,
+html[data-theme="dark"] .details-header {
+  background-color: #292a2d;
+  color: #e8eaed;
+  border-color: #454a50;
+}
+
+html[data-theme="dark"] .btn-detail-action,
+html[data-theme="dark"] .deleted-msg-restore-btn,
+html[data-theme="dark"] .deleted-msg-delete-btn,
+html[data-theme="dark"] .action-priority-select,
+html[data-theme="dark"] .action-tab-btn.active,
+html[data-theme="dark"] .bulk-label-actions select,
+html[data-theme="dark"] .bulk-label-actions button {
+  background-color: #303134;
+  color: #e8eaed;
+  border-color: #5f6368;
+}
+
+html[data-theme="dark"] .btn-detail-action svg,
+html[data-theme="dark"] .btn-detail-action:hover,
+html[data-theme="dark"] .btn-dialog-cancel {
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .btn-detail-action:hover,
+html[data-theme="dark"] .deleted-msg-restore-btn:hover,
+html[data-theme="dark"] .action-tab-btn.active {
+  background-color: #3c4043;
+}
+
+html[data-theme="dark"] .btn-dialog-confirm {
+  background-color: #8ab4f8;
+  color: #202124;
+}
+
+html[data-theme="dark"] .spam-warning {
+  background-color: #493d24;
+  border-color: #69572d;
+  color: #f9e7b4;
+}
+
+html[data-theme="dark"] .actions-tabs,
+html[data-theme="dark"] .actions-filter-tabs,
+html[data-theme="dark"] .task-email-ref,
+html[data-theme="dark"] .deadline-chip.no-deadline {
+  background-color: #303134;
+  color: #bdc1c6;
+}
+
+html[data-theme="dark"] .actions-ai-tag,
+html[data-theme="dark"] .task-email-ref:hover {
+  background-color: #34465e;
+  border-color: #526987;
+  color: #d3e3fd;
+}
+
+html[data-theme="dark"] .actions-banner.success {
+  background-color: #203d30;
+  border-color: #345b47;
+  color: #a8dab5;
+}
+
+html[data-theme="dark"] .actions-banner.error {
+  background-color: #4a2929;
+  border-color: #714040;
+  color: #f4b8b4;
+}
+
+html[data-theme="dark"] .actions-banner.info {
+  background-color: #26394f;
+  border-color: #3d5877;
+  color: #a8c7fa;
+}
+
+html[data-theme="dark"] .modal-footer,
+html[data-theme="dark"] .compose-attachments {
+  border-color: #454a50;
+}
+
+html[data-theme="dark"] .compose-attachment-chip {
+  background-color: #303134;
+  border-color: #5f6368;
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .email-attachment-name {
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .email-attachment-type,
+html[data-theme="dark"] .thread-deleted-sep,
+html[data-theme="dark"] .thread-deleted-forever-wrap {
+  color: #bdc1c6;
+}
+
+@media (max-width: 600px) {
+  .theme-toggle {
+    min-height: 36px;
+    padding: 6px 9px;
+  }
+
+  .page-theme-toggle {
+    top: 10px;
+    right: 10px;
+  }
+}
