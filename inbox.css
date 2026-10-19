@@ -2292,6 +2292,40 @@ body {
   color: #041e49;
 }
 
+.task-email-ref.in-trash {
+  background-color: #fef7e0;
+  color: #b06000;
+  border: 1px solid #f9ab00;
+}
+
+.task-email-ref.in-trash:hover {
+  background-color: #feefc3;
+  color: #8c4700;
+}
+
+.task-email-ref.in-spam {
+  background-color: #fce8e6;
+  color: #c5221f;
+  border: 1px solid #f28b82;
+}
+
+.task-email-ref.in-spam:hover {
+  background-color: #fad2cf;
+  color: #a51d24;
+}
+
+.task-email-ref.deleted {
+  background-color: #f8f9fa;
+  color: #5f6368;
+  border: 1px dashed #c6c6c6;
+  cursor: default;
+}
+
+.task-email-ref.deleted:hover {
+  background-color: #f8f9fa;
+  color: #5f6368;
+}
+
 /* Task Actions (Delete, etc.) */
 .task-actions {
   display: flex;

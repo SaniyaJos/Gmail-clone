@@ -15,6 +15,7 @@ router.delete('/:id/attachments/:attachmentId', requireTokenAuth, attachmentCont
 router.get('/starred', emailController.getStarredEmails);
 router.get('/counts', requireAuth, emailController.getFolderCounts);
 router.get('/:id/thread', requireAuth, emailController.getEmailThread);
+router.get('/:id', requireAuth, emailController.getEmailById);
 router.get('/', emailController.getEmails);
 router.delete('/folder/:folder/empty', requireAuth, emailController.emptyFolder);
 router.patch('/:id/star', emailController.starEmail);

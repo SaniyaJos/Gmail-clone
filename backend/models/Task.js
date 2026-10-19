@@ -14,6 +14,11 @@ const taskSchema = new mongoose.Schema({
     required: [true, 'Associated email ID is required'],
     index: true
   },
+  emailSubject: {
+    type: String,
+    default: '',
+    trim: true
+  },
   title: {
     type: String,
     required: [true, 'Task title is required'],

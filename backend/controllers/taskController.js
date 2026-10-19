@@ -125,6 +125,7 @@ async function extractActions(req, res) {
         tasksToInsert.push({
           userEmail,
           emailId: email._id,
+          emailSubject: email.subject || '(No Subject)',
           title: item.title,
           description: item.description || '',
           deadline: item.deadline || null,
@@ -190,7 +191,7 @@ async function getTasks(req, res) {
     const tasks = await Task.find(filter)
       .populate({
         path: 'emailId',
-        select: 'subject sender receiver timestamp isTrash'
+        select: 'subject sender receiver timestamp isTrash isSpam'
       })
       .sort({ createdAt: -1 })
       .lean();
@@ -199,8 +200,19 @@ async function getTasks(req, res) {
     const involvedEmails = new Set();
     tasks.forEach(t => {
       if (t.emailId) {
+        if (!t.emailSubject && t.emailId.subject) {
+          t.emailSubject = t.emailId.subject;
+        }
+        t.isEmailDeleted = false;
+        t.isEmailInTrash = Boolean(t.emailId.isTrash);
+        t.isEmailSpam = Boolean(t.emailId.isSpam);
+
         if (t.emailId.sender) involvedEmails.add(t.emailId.sender.toLowerCase());
         if (t.emailId.receiver) involvedEmails.add(t.emailId.receiver.toLowerCase());
+      } else {
+        t.isEmailDeleted = true;
+        t.isEmailInTrash = false;
+        t.isEmailSpam = false;
       }
     });
 

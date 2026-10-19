@@ -417,7 +417,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Bin and Spam both delete forever (every other folder moves to Bin)
   function isPermanentDeleteFolder() {
-    return activeFolder === 'bin' || activeFolder === 'spam';
+    return activeFolder === 'bin' || activeFolder === 'spam' || Boolean(currentOpenEmail && (currentOpenEmail.isTrash || currentOpenEmail.isSpam));
   }
 
   // Report spam / Not spam endpoints need the signed-in user (x-user-email header)
@@ -547,19 +547,37 @@ document.addEventListener('DOMContentLoaded', () => {
       const hasUnread = threadList.some(e => !e.isRead && !e.isDraft);
       const hasStarred = threadList.some(e => e.isStarred);
 
-      // Collect sender names across conversation
-      const participantNames = [];
-      threadList.forEach(e => {
-        const isMe = e.sender && e.sender.toLowerCase() === userEmail.toLowerCase();
-        const name = isMe
-          ? 'me'
-          : (e.senderName || e.firstName || (e.sender ? e.sender.split('@')[0] : 'Unknown'));
-        if (!participantNames.includes(name)) {
-          participantNames.push(name);
-        }
-      });
+      // Collect sender/recipient names across conversation
+      let displaySenderHtml = '';
+      if (activeFolder === 'sent') {
+        const recipNames = [];
+        threadList.forEach(e => {
+          const names = Array.isArray(e.receiverFirstNames) && e.receiverFirstNames.length > 0
+            ? e.receiverFirstNames
+            : (e.receiverFirstName ? [e.receiverFirstName] : (e.receiverName ? [e.receiverName.split(' ')[0]] : (e.receiver ? e.receiver.split(',').map(r => r.trim().split('@')[0]) : [])));
+          names.forEach(name => {
+            const clean = name.trim();
+            if (clean && !recipNames.includes(clean)) {
+              recipNames.push(clean);
+            }
+          });
+        });
+        const recipsText = recipNames.length > 0 ? recipNames.join(', ') : 'recipient';
+        displaySenderHtml = `To: ${escapeHtml(recipsText)}`;
+      } else {
+        const participantNames = [];
+        threadList.forEach(e => {
+          const isMe = e.sender && e.sender.toLowerCase() === userEmail.toLowerCase();
+          const name = isMe
+            ? 'me'
+            : (e.senderName || e.firstName || (e.sender ? e.sender.split('@')[0] : 'Unknown'));
+          if (!participantNames.includes(name)) {
+            participantNames.push(name);
+          }
+        });
+        displaySenderHtml = escapeHtml(participantNames.join(', '));
+      }
 
-      let displaySenderHtml = escapeHtml(participantNames.join(', '));
       if (threadList.length > 1) {
         displaySenderHtml += ` <span class="email-thread-count">${threadList.length}</span>`;
       }
@@ -622,16 +640,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const formattedDate = formatTimestamp(email.timestamp);
 
-      // Determine sender display: if user is sender, display receiver email
+      // Determine sender display: if user is sender, display receiver
       let displaySender;
       if (email.isDraft) {
         displaySender = '<span class="draft-label">Draft</span>';
       } else if (email.displaySenderHtml) {
         displaySender = email.displaySenderHtml;
+      } else if (activeFolder === 'sent' || email.sender === userEmail) {
+        const recipFirstName = email.receiverFirstName ||
+          (Array.isArray(email.receiverFirstNames) && email.receiverFirstNames[0]) ||
+          (email.receiverName ? email.receiverName.split(' ')[0] : '') ||
+          (email.receiver ? email.receiver.split('@')[0] : '');
+        displaySender = `To: ${escapeHtml(recipFirstName || 'recipient')}`;
       } else {
-        displaySender = email.sender === userEmail
-          ? `To: ${escapeHtml(email.receiver)}`
-          : escapeHtml(email.firstName || email.sender.split('@')[0]);
+        displaySender = escapeHtml(email.firstName || email.sender.split('@')[0]);
       }
 
       // Star control (hidden when in Bin or Spam)
@@ -829,8 +851,8 @@ document.addEventListener('DOMContentLoaded', () => {
     emailDetailsModal.style.display = 'flex';
     emailInfoPanel.hidden = true;
     emailInfoToggle.setAttribute('aria-expanded', 'false');
-    const inBin = activeFolder === 'bin';
-    const inSpam = activeFolder === 'spam';
+    const inBin = activeFolder === 'bin' || Boolean(email.isTrash);
+    const inSpam = activeFolder === 'spam' || Boolean(email.isSpam);
     detailsActionRestore.style.display = inBin ? 'inline-flex' : 'none';
     detailsActionDelete.title = inBin ? 'Permanently delete' : inSpam ? 'Delete forever' : 'Move to Bin';
     detailsStarButton.style.display = (inBin || inSpam) ? 'none' : 'inline-flex';
@@ -1027,8 +1049,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (emailInfoSubject) emailInfoSubject.textContent = email.subject || '(No Subject)';
 
     // Header action buttons for the main email
-    const inBin = activeFolder === 'bin';
-    const inSpam = activeFolder === 'spam';
+    const inBin = activeFolder === 'bin' || Boolean(email.isTrash);
+    const inSpam = activeFolder === 'spam' || Boolean(email.isSpam);
     const canReplyOrForward = !inBin && !inSpam && !email.isDraft;
 
     if (btnHeaderStar) {
@@ -1459,29 +1481,53 @@ document.addEventListener('DOMContentLoaded', () => {
       // Original Email Reference (Show First Name + Last Name of the other party)
       let emailRefHtml = '';
       const emailObj = task.emailId;
-      if (!isInline && emailObj && typeof emailObj === 'object') {
-        const emailSubject = escapeHtml(emailObj.subject || '(No Subject)');
-        const rawSender = (emailObj.sender || '').toLowerCase();
-        const rawReceiver = (emailObj.receiver || '').toLowerCase();
-        const currentEmail = userEmail.toLowerCase();
+      if (!isInline) {
+        if (emailObj && typeof emailObj === 'object') {
+          const emailSubject = escapeHtml(emailObj.subject || task.emailSubject || '(No Subject)');
+          const rawSender = (emailObj.sender || '').toLowerCase();
+          const rawReceiver = (emailObj.receiver || '').toLowerCase();
+          const currentEmail = userEmail.toLowerCase();
 
-        const senderDisplay = escapeHtml(emailObj.senderName || rawSender.split('@')[0] || 'Unknown');
-        const receiverDisplay = escapeHtml(emailObj.receiverName || rawReceiver.split('@')[0] || 'Unknown');
+          const senderDisplay = escapeHtml(emailObj.senderName || rawSender.split('@')[0] || 'Unknown');
+          const receiverDisplay = escapeHtml(emailObj.receiverName || rawReceiver.split('@')[0] || 'Unknown');
 
-        let displayTarget = '';
-        if (currentEmail === rawSender) {
-          // Logged in user is the sender: show who it was sent to (First + Last Name)
-          displayTarget = `To: ${receiverDisplay}`;
+          let displayTarget = '';
+          if (currentEmail === rawSender) {
+            // Logged in user is the sender: show who it was sent to (First + Last Name)
+            displayTarget = `To: ${receiverDisplay}`;
+          } else {
+            // Logged in user is the recipient: show who it was received from (First + Last Name)
+            displayTarget = `From: ${senderDisplay}`;
+          }
+
+          if (emailObj.isTrash) {
+            emailRefHtml = `
+              <a class="task-email-ref in-trash" title="This email is in Bin (${displayTarget}): ${emailSubject}. Click to view" data-email-id="${emailObj._id}" data-in-trash="true">
+                🗑️ [In Bin] ✉ ${displayTarget} • ${emailSubject}
+              </a>
+            `;
+          } else if (emailObj.isSpam) {
+            emailRefHtml = `
+              <a class="task-email-ref in-spam" title="This email is in Spam (${displayTarget}): ${emailSubject}. Click to view" data-email-id="${emailObj._id}" data-in-spam="true">
+                🚨 [In Spam] ✉ ${displayTarget} • ${emailSubject}
+              </a>
+            `;
+          } else {
+            emailRefHtml = `
+              <a class="task-email-ref" title="View email (${displayTarget}): ${emailSubject}" data-email-id="${emailObj._id}">
+                ✉ ${displayTarget} • ${emailSubject}
+              </a>
+            `;
+          }
         } else {
-          // Logged in user is the recipient: show who it was received from (First + Last Name)
-          displayTarget = `From: ${senderDisplay}`;
+          // Original email permanently deleted from database
+          const subjectDisplay = task.emailSubject ? ` (${escapeHtml(task.emailSubject)})` : '';
+          emailRefHtml = `
+            <span class="task-email-ref deleted" title="The source email was permanently deleted, but your task details remain safely saved here.">
+              ⚠️ Original email deleted${subjectDisplay}
+            </span>
+          `;
         }
-
-        emailRefHtml = `
-          <a class="task-email-ref" title="View email (${displayTarget}): ${emailSubject}" data-email-id="${emailObj._id}">
-            ✉ ${displayTarget} • ${emailSubject}
-          </a>
-        `;
       }
 
       card.innerHTML = `
@@ -1528,7 +1574,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       // Email Reference Link Click Event
-      const emailRefLink = card.querySelector('.task-email-ref');
+      const emailRefLink = card.querySelector('.task-email-ref[data-email-id]');
       if (emailRefLink) {
         emailRefLink.addEventListener('click', async (e) => {
           e.preventDefault();
@@ -1625,20 +1671,37 @@ document.addEventListener('DOMContentLoaded', () => {
   // Open an email by ID (used by task cards to navigate directly to the original email)
   async function openEmailDetailsById(emailId) {
     try {
+      if (!emailId) {
+        alert('The original email was permanently deleted, but your task details remain safely saved here.');
+        return;
+      }
+
       // First check cache
       let foundEmail = emailListCache.find(e => e._id === emailId);
       if (!foundEmail) {
-        const response = await fetch(`${API_BASE}/emails?email=${encodeURIComponent(userEmail)}&folder=all`);
+        // Direct ID lookup on the server
+        const response = await fetch(`${API_BASE}/emails/${emailId}`, {
+          headers: { 'x-user-email': userEmail }
+        });
         if (response.ok) {
-          const allEmails = await response.json();
-          foundEmail = allEmails.find(e => e._id === emailId);
+          foundEmail = await response.json();
+        } else if (response.status === 404) {
+          alert('The original email was permanently deleted, but your task details remain safely saved here.');
+          return;
+        } else {
+          // Fallback query across folders
+          const allRes = await fetch(`${API_BASE}/emails?email=${encodeURIComponent(userEmail)}&folder=all`);
+          if (allRes.ok) {
+            const allEmails = await allRes.json();
+            foundEmail = allEmails.find(e => e._id === emailId);
+          }
         }
       }
 
       if (foundEmail) {
         openEmailDetails(foundEmail);
       } else {
-        alert('The original email could not be found or may have been deleted.');
+        alert('The original email was permanently deleted, but your task details remain safely saved here.');
       }
     } catch (err) {
       console.error('Error opening source email:', err);
@@ -1787,11 +1850,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Details Modal: Restore button
   detailsActionRestore.addEventListener('click', async () => {
-    if (!currentOpenEmail || activeFolder !== 'bin') return;
+    if (!currentOpenEmail || (!currentOpenEmail.isTrash && activeFolder !== 'bin')) return;
 
     await restoreEmail(currentOpenEmail._id);
     closeDetailsModal();
-    fetchEmails(activeFolder);
+    if (activeFolder === 'actions') {
+      fetchUserTasks();
+    } else {
+      fetchEmails(activeFolder);
+    }
   });
 
   // ==========================================
@@ -2707,8 +2774,8 @@ document.addEventListener('DOMContentLoaded', () => {
       return true;
     });
 
-    const inBin = activeFolder === 'bin';
-    const inSpam = activeFolder === 'spam';
+    const inBin = activeFolder === 'bin' || Boolean(targetEmail && targetEmail.isTrash);
+    const inSpam = activeFolder === 'spam' || Boolean(targetEmail && targetEmail.isSpam);
 
     if (inBin) {
       currentThreadActiveEmails = currentThreadEmails.filter(e => e.isTrash);

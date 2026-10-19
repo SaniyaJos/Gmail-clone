@@ -42,11 +42,18 @@ async function addSenderNames(emails) {
       return u?.displayName || u?.firstName || r.split('@')[0];
     });
 
+    const receiverFirstNames = receiverList.map(r => {
+      const u = participantNames.get(r.toLowerCase());
+      return u?.firstName || (u?.displayName ? u.displayName.split(' ')[0] : null) || r.split('@')[0];
+    });
+
     return {
       ...email,
       firstName: participantNames.get(email.sender?.toLowerCase())?.firstName || null,
       senderName: participantNames.get(email.sender?.toLowerCase())?.displayName || null,
       receiverName: receiverDisplayNames.length > 0 ? receiverDisplayNames.join(', ') : null,
+      receiverFirstName: receiverFirstNames[0] || null,
+      receiverFirstNames,
       receiverNamesList: receiverDisplayNames
     };
   });
@@ -855,9 +862,47 @@ async function undoSendEmail(req, res) {
   }
 }
 
+/**
+ * GET /api/emails/:id
+ * Fetches a single email by ID for the authorized owner, sender, or receiver.
+ */
+async function getEmailById(req, res) {
+  try {
+    const { id } = req.params;
+    const userEmail = (req.user?.email || req.query.email || '').toLowerCase();
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ message: 'Invalid email ID' });
+    }
+
+    const email = await Email.findById(id).lean();
+    if (!email) {
+      return res.status(404).json({ message: 'Email not found' });
+    }
+
+    // Access check: User must be owner, sender, or receiver
+    const isOwner = email.owner && email.owner.toLowerCase() === userEmail;
+    const isSender = email.sender && email.sender.toLowerCase() === userEmail;
+    const isReceiver = email.receiver && email.receiver.toLowerCase().includes(userEmail);
+
+    if (!isOwner && !isSender && !isReceiver) {
+      return res.status(403).json({ message: 'Forbidden: Access denied' });
+    }
+
+    const [enriched] = await addSenderNames([email]);
+    const withExpiry = addExpiryInfo([enriched], email.isTrash ? 'bin' : email.isSpam ? 'spam' : 'inbox')[0];
+
+    return res.status(200).json(withExpiry);
+  } catch (err) {
+    console.error('Get email by ID error:', err);
+    return res.status(500).json({ message: 'Internal server error while fetching email' });
+  }
+}
+
 module.exports = {
   createEmail,
   getEmails,
+  getEmailById,
   getStarredEmails,
   starEmail,
   unstarEmail,
