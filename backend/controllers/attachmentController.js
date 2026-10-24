@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const Email = require('../models/Email');
 const {
-  getAttachmentPath,
+  openAttachmentReadStream,
   removeUnreferencedAttachments,
   saveUploadedFiles
 } = require('../services/attachmentStorage');
@@ -82,19 +82,31 @@ async function downloadAttachment(req, res) {
     if (!authorized) return;
     const { attachment } = authorized;
 
-    res.set('X-Content-Type-Options', 'nosniff');
-    res.download(getAttachmentPath(attachment.storageName), attachment.filename, err => {
-      if (!err) return;
-      if (res.headersSent) {
-        console.error('Attachment download failed after response started:', err.message);
-        return;
-      }
-      if (err.code === 'ENOENT') {
-        return res.status(404).json({ message: 'The attachment file is no longer available.' });
-      }
-      console.error('Attachment download error:', err);
-      return res.status(500).json({ message: 'Could not download the attachment.' });
+    const streamInfo = await openAttachmentReadStream(attachment.storageName);
+    if (!streamInfo) {
+      return res.status(404).json({ message: 'The attachment file is no longer available.' });
+    }
+
+    const safeFilename = (attachment.filename || 'attachment').replace(/["\r\n]/g, '_');
+    const encodedFilename = encodeURIComponent(safeFilename);
+
+    res.set({
+      'Content-Type': attachment.mimeType || streamInfo.mimeType || 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodedFilename}`,
+      'X-Content-Type-Options': 'nosniff'
     });
+    if (streamInfo.length) {
+      res.set('Content-Length', streamInfo.length);
+    }
+
+    streamInfo.stream.on('error', err => {
+      console.error('Attachment download stream error:', err.message);
+      if (!res.headersSent) {
+        res.status(500).json({ message: 'Could not download the attachment.' });
+      }
+    });
+
+    streamInfo.stream.pipe(res);
   } catch (err) {
     console.error('Download attachment error:', err);
     return res.status(500).json({ message: 'Could not download the attachment.' });
@@ -106,27 +118,38 @@ async function previewAttachment(req, res) {
     const authorized = await getAuthorizedAttachment(req, res);
     if (!authorized) return;
     const { attachment } = authorized;
-    if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(attachment.mimeType)) {
+
+    const previewable = [
+      'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf',
+      'text/plain', 'text/csv'
+    ];
+    if (!previewable.includes(attachment.mimeType)) {
       return res.status(415).json({ message: 'This file type cannot be previewed.' });
     }
 
-    res.type(attachment.mimeType);
+    const streamInfo = await openAttachmentReadStream(attachment.storageName);
+    if (!streamInfo) {
+      return res.status(404).json({ message: 'The attachment file is no longer available.' });
+    }
+
+    const safeFilename = (attachment.filename || 'attachment').replace(/["\r\n]/g, '_');
     res.set({
-      'Content-Disposition': 'inline',
+      'Content-Type': attachment.mimeType || streamInfo.mimeType,
+      'Content-Disposition': `inline; filename="${safeFilename}"`,
       'X-Content-Type-Options': 'nosniff'
     });
-    res.sendFile(getAttachmentPath(attachment.storageName), err => {
-      if (!err) return;
-      if (res.headersSent) {
-        console.error('Attachment preview failed after response started:', err.message);
-        return;
+    if (streamInfo.length) {
+      res.set('Content-Length', streamInfo.length);
+    }
+
+    streamInfo.stream.on('error', err => {
+      console.error('Attachment preview stream error:', err.message);
+      if (!res.headersSent) {
+        res.status(500).json({ message: 'Could not preview the attachment.' });
       }
-      if (err.code === 'ENOENT') {
-        return res.status(404).json({ message: 'The attachment file is no longer available.' });
-      }
-      console.error('Attachment preview error:', err);
-      return res.status(500).json({ message: 'Could not preview the attachment.' });
     });
+
+    streamInfo.stream.pipe(res);
   } catch (err) {
     console.error('Preview attachment error:', err);
     return res.status(500).json({ message: 'Could not preview the attachment.' });

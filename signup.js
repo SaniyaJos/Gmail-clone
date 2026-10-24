@@ -438,6 +438,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await response.json();
 
       if (response.ok) {
+        try {
+          localStorage.setItem(`inboxflow-new-signup:${payload.email.toLowerCase()}`, 'true');
+        } catch (_) {}
         alert(`Account created successfully!\nEmail: ${payload.email}\nYou can now sign in.`);
         window.location.href = 'signin.html';
       } else {

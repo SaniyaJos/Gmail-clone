@@ -635,12 +635,33 @@ async function findOwnedEmail(req, res) {
     return null;
   }
 
-  if (email.owner !== req.user.email) {
+  const userEmail = (req.user && req.user.email ? req.user.email : '').toLowerCase();
+  const emailOwner = (email.owner || '').toLowerCase();
+
+  if (emailOwner && userEmail && emailOwner !== userEmail) {
     res.status(403).json({ message: 'You can only change your own emails' });
     return null;
   }
 
   return email;
+}
+
+/**
+ * PATCH /api/emails/:id/read
+ * Marks an email as read for its owner.
+ */
+async function markEmailRead(req, res) {
+  try {
+    const email = await findOwnedEmail(req, res);
+    if (!email) return;
+
+    email.isRead = true;
+    await email.save();
+    return res.status(200).json({ message: 'Message marked as read', email });
+  } catch (err) {
+    console.error('Mark read error:', err);
+    return res.status(500).json({ message: 'Internal server error while marking email as read' });
+  }
 }
 
 /**
@@ -952,6 +973,7 @@ module.exports = {
   updateEmail,
   updateDraft,
   deleteEmail,
+  markEmailRead,
   markEmailUnread,
   reportSpam,
   markNotSpam,

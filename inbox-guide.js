@@ -63,6 +63,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const onboardingStorageKey = accountEmail
     ? `inboxflow-guide-onboarding:${encodeURIComponent(accountEmail)}`
     : null;
+  const newSignupKey = accountEmail
+    ? `inboxflow-new-signup:${encodeURIComponent(accountEmail)}`
+    : null;
   const categories = [
     'Getting Started',
     'Inbox and Email Organization',
@@ -510,7 +513,6 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="inboxflow-guide-actions">
           <button type="button" class="inboxflow-guide-button inboxflow-guide-button-primary" data-guide-action="start-tour">Start Guided Tour</button>
           <button type="button" class="inboxflow-guide-button" data-guide-action="directory">Explore All Features</button>
-          <button type="button" class="inboxflow-guide-button" data-guide-action="search">Search the Guide</button>
           <button type="button" class="inboxflow-guide-button" data-guide-action="skip-onboarding" ${isOnboarding ? '' : 'hidden'}>Skip onboarding</button>
         </div>
       </section>
@@ -521,6 +523,9 @@ document.addEventListener('DOMContentLoaded', () => {
     content.innerHTML = `
       <div class="inboxflow-guide-directory">
         <nav class="inboxflow-guide-sidebar" aria-label="Guide categories">
+          <button type="button" class="inboxflow-guide-button inboxflow-guide-back-menu-btn" data-guide-action="back-welcome" title="Back to main menu">
+            ← Main Menu
+          </button>
           <p class="inboxflow-guide-sidebar-title">Categories</p>
           <div id="inboxflow-guide-categories"></div>
         </nav>
@@ -680,10 +685,14 @@ document.addEventListener('DOMContentLoaded', () => {
       guideReturnFocus.focus({ preventScroll: true });
     }
     guideReturnFocus = null;
+    markOnboardingSeen();
     isOnboarding = false;
   }
 
   function markOnboardingSeen() {
+    if (newSignupKey) {
+      try { localStorage.removeItem(newSignupKey); } catch (_) {}
+    }
     if (!onboardingStorageKey) return;
     try {
       localStorage.setItem(onboardingStorageKey, 'seen');
@@ -692,13 +701,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function onboardingWasSeen() {
-    if (!onboardingStorageKey) return true;
+  function shouldAutoShowGuide() {
+    if (!newSignupKey) return false;
     try {
-      return localStorage.getItem(onboardingStorageKey) === 'seen';
-    } catch (error) {
-      console.warn('Could not read the InboxFlow Guide onboarding preference.', error);
-      return true;
+      const isNewSignup = localStorage.getItem(newSignupKey) === 'true';
+      const alreadySeen = onboardingStorageKey && localStorage.getItem(onboardingStorageKey) === 'seen';
+      return isNewSignup && !alreadySeen;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -853,6 +863,9 @@ document.addEventListener('DOMContentLoaded', () => {
         activeCategory = 'All features';
         showDirectory();
         break;
+      case 'back-welcome':
+        showWelcome();
+        break;
       case 'search':
         activeCategory = 'All features';
         showDirectory(true);
@@ -904,9 +917,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  if (currentUser?.token && accountEmail && !onboardingWasSeen()) {
+  if (currentUser?.token && accountEmail && shouldAutoShowGuide()) {
     onboardingTimer = window.setTimeout(() => {
-      if (!onboardingWasSeen()) openGuide({ onboarding: true });
+      if (shouldAutoShowGuide()) openGuide({ onboarding: true });
     }, 700);
   }
 

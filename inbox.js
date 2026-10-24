@@ -29,6 +29,27 @@ document.addEventListener('DOMContentLoaded', () => {
     return { ...headers, Authorization: `Bearer ${authToken}` };
   }
 
+  function getAvatarColor(identifier = '') {
+    const colors = [
+      '#7b1fa2', // Purple
+      '#1a73e8', // Google Blue
+      '#0f9d58', // Green
+      '#d93025', // Red
+      '#e65100', // Deep Orange
+      '#00897b', // Teal
+      '#3949ab', // Indigo
+      '#8e24aa', // Dark Violet
+      '#c2185b', // Pink
+      '#0288d1'  // Light Blue
+    ];
+    let hash = 0;
+    const str = String(identifier).toLowerCase();
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  }
+
   // Set avatar initial title and bind dropdown
   const headerAvatar = document.getElementById('header-avatar');
   const accountDropdown = document.getElementById('account-dropdown');
@@ -37,12 +58,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const dropdownEmail = document.getElementById('dropdown-email');
   const btnLogout = document.getElementById('btn-dropdown-logout');
 
-  if (headerAvatar && currentUser.firstName) {
-    headerAvatar.title = `${currentUser.firstName} (${userEmail})`;
+  if (headerAvatar) {
+    const userDisplayName = `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || userEmail;
+    const userInitial = (currentUser.firstName ? currentUser.firstName.charAt(0) : (userEmail ? userEmail.charAt(0) : 'U')).toUpperCase();
+    const avatarColor = getAvatarColor(userEmail || currentUser.firstName || 'user');
+
+    headerAvatar.textContent = userInitial;
+    headerAvatar.style.backgroundColor = avatarColor;
+    headerAvatar.title = `${userDisplayName} (${userEmail})`;
 
     if (dropdownAvatar && dropdownName && dropdownEmail) {
-      dropdownAvatar.textContent = currentUser.firstName.charAt(0).toUpperCase();
-      dropdownName.textContent = `${currentUser.firstName} ${currentUser.lastName || ''}`.trim();
+      dropdownAvatar.textContent = userInitial;
+      dropdownAvatar.style.backgroundColor = avatarColor;
+      dropdownName.textContent = userDisplayName;
       dropdownEmail.textContent = userEmail;
     }
 
@@ -152,6 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const deleteActionBarBtn = document.getElementById('action-delete');
   const restoreActionBarBtn = document.getElementById('action-restore');
   const unreadActionBarBtn = document.getElementById('action-unread');
+  const readActionBarBtn = document.getElementById('action-read');
   const refreshActionBarBtn = document.getElementById('action-refresh');
   const spamActionBarBtn = document.getElementById('action-spam');
   const notSpamActionBarBtn = document.getElementById('action-not-spam');
@@ -197,6 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Details Modal Elements
   const emailDetailsModal = document.getElementById('email-details-modal');
   const btnDetailsBack = document.getElementById('btn-details-back');
+  const detailsActionUnread = document.getElementById('details-action-unread');
   const detailsActionRestore = document.getElementById('details-action-restore');
   const detailsActionDelete = document.getElementById('details-action-delete');
   const detailsActionSpam = document.getElementById('details-action-spam');
@@ -235,6 +265,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const emailInfoSubject = document.getElementById('email-info-subject');
   const emailAttachmentsSection = document.getElementById('email-attachments');
   const emailAttachmentsList = document.getElementById('email-attachments-list');
+
+  // Attachment Preview Lightbox Elements
+  const attachmentLightboxModal = document.getElementById('attachment-lightbox-modal');
+  const btnLightboxClose = document.getElementById('btn-lightbox-close');
+  const btnLightboxDownload = document.getElementById('btn-lightbox-download');
+  const btnLightboxOpenTab = document.getElementById('btn-lightbox-open-tab');
+  const lightboxFilename = document.getElementById('lightbox-filename');
+  const lightboxFilesize = document.getElementById('lightbox-filesize');
+  const lightboxSpinner = document.getElementById('lightbox-spinner');
+  const lightboxContent = document.getElementById('lightbox-content');
+  const lightboxDownloadText = document.getElementById('lightbox-download-text');
+
+  let currentPreviewAttachment = null;
+  let currentPreviewEmail = null;
 
   // Email-to-Action Engine DOM Elements
   const btnExtractActions = document.getElementById('btn-extract-actions');
@@ -674,28 +718,80 @@ document.addEventListener('DOMContentLoaded', () => {
     return patchEmailAction(id, 'unread');
   }
 
-  async function markEmailsUnread(ids) {
-    const results = await Promise.all(ids.map(markUnread));
-    const failed = results.some(result => !result.ok);
-    if (failed) alert('Some messages could not be marked as unread.');
+  function markRead(id) {
+    return patchEmailAction(id, 'read');
+  }
+
+  async function markEmailsRead(ids) {
+    if (!ids || ids.length === 0) return;
+    const targetIds = Array.isArray(ids) ? ids : [ids];
+
+    // Optimistically update memory and DOM
+    targetIds.forEach(id => {
+      const row = emailListUl.querySelector(`li[data-id="${id}"]`);
+      if (row) {
+        row.classList.remove('unread');
+        row.classList.add('read');
+      }
+      if (Array.isArray(emailListCache)) {
+        emailListCache.forEach(cached => {
+          if (cached._id === id || (cached.threadEmailIds && cached.threadEmailIds.includes(id))) {
+            cached.isRead = true;
+          }
+        });
+      }
+    });
+
+    await Promise.all(targetIds.map(id => updateEmailStatus(id, { isRead: true })));
     await Promise.all([
       fetchEmails(activeFolder),
       refreshInboxBadge(),
       refreshSpamBadge()
     ]);
-    return !failed;
+  }
+
+  async function markEmailsUnread(ids) {
+    if (!ids || ids.length === 0) return;
+    const targetIds = Array.isArray(ids) ? ids : [ids];
+
+    // Optimistically update memory and DOM
+    targetIds.forEach(id => {
+      const row = emailListUl.querySelector(`li[data-id="${id}"]`);
+      if (row) {
+        row.classList.remove('read');
+        row.classList.add('unread');
+      }
+      if (Array.isArray(emailListCache)) {
+        emailListCache.forEach(cached => {
+          if (cached._id === id || (cached.threadEmailIds && cached.threadEmailIds.includes(id))) {
+            cached.isRead = false;
+          }
+        });
+      }
+    });
+
+    await Promise.all(targetIds.map(id => updateEmailStatus(id, { isRead: false })));
+    await Promise.all([
+      fetchEmails(activeFolder),
+      refreshInboxBadge(),
+      refreshSpamBadge()
+    ]);
   }
 
   // Folders where "Report spam" is available (Bin included: reporting moves the mail out of Bin into Spam)
   const REPORT_SPAM_FOLDERS = ['inbox', 'starred', 'all', 'bin'];
   const UNREAD_ACTION_FOLDERS = ['inbox', 'starred', 'sent', 'all'];
 
-  function canMarkUnread(email) {
+  function canToggleReadStatus(email) {
     return Boolean(email)
       && !email.isDraft
       && !email.isTrash
       && !email.isSpam
-      && UNREAD_ACTION_FOLDERS.includes(activeFolder);
+      && (UNREAD_ACTION_FOLDERS.includes(activeFolder) || Boolean(activeLabelId));
+  }
+
+  function canMarkUnread(email) {
+    return canToggleReadStatus(email);
   }
 
   // Only mail received from someone else can be reported, and only from the folders above
@@ -940,16 +1036,31 @@ document.addEventListener('DOMContentLoaded', () => {
           </button>
         `;
       } else {
-        const unreadBtn = email.isRead && canMarkUnread(email)
-          ? `<button class="action-icon-btn btn-row-unread" data-id="${email._id}" title="Mark as unread" aria-label="Mark as unread">
-              <img src="images/envelope-regular-full.svg" alt="" class="row-action-icon-img">
-            </button>`
-          : '';
+        let readToggleBtn = '';
+        if (canToggleReadStatus(email)) {
+          if (email.isRead) {
+            readToggleBtn = `
+              <button class="action-icon-btn btn-row-unread" data-id="${email._id}" title="Mark as unread" aria-label="Mark as unread">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                  <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8l8 5 8-5v10zm-8-7L4 6h16l-8 5z"/>
+                </svg>
+              </button>
+            `;
+          } else {
+            readToggleBtn = `
+              <button class="action-icon-btn btn-row-read" data-id="${email._id}" title="Mark as read" aria-label="Mark as read">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                  <path d="M21.99 8c0-.72-.37-1.35-.94-1.7L12 1 2.95 6.3C2.38 6.65 2 7.28 2 8v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2l-.01-10zM12 3.32L19.99 8v.01L12 13 4 8.01V8l8-4.68zM4 18v-8.08l7.46 4.66c.16.1.35.15.54.15s.38-.05.54-.15L20 9.92V18H4z"/>
+                </svg>
+              </button>
+            `;
+          }
+        }
         const reportBtn = canReportSpam(email)
           ? `<button class="action-icon-btn btn-row-spam" data-id="${email._id}" title="Report spam">${SPAM_ICON_SVG}</button>`
           : '';
         rowActions = `
-          ${unreadBtn}
+          ${readToggleBtn}
           ${reportBtn}
           <button class="action-icon-btn btn-row-delete" data-id="${email._id}" title="Move to Bin">
             <img src="images/trash-can-regular-full.svg" alt="Move to Bin" class="row-action-icon-img">
@@ -1089,11 +1200,25 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       }
 
+      const readBtn = li.querySelector('.btn-row-read');
+      if (readBtn) {
+        readBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const targetIds = (email.threadEmailIds && email.threadEmailIds.length > 0)
+            ? email.threadEmailIds
+            : [email._id];
+          await markEmailsRead(targetIds);
+        });
+      }
+
       const unreadBtn = li.querySelector('.btn-row-unread');
       if (unreadBtn) {
         unreadBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
-          await markEmailsUnread(email.threadEmailIds || [email._id]);
+          const targetIds = (email.threadEmailIds && email.threadEmailIds.length > 0)
+            ? email.threadEmailIds
+            : [email._id];
+          await markEmailsUnread(targetIds);
         });
       }
 
@@ -1125,6 +1250,10 @@ document.addEventListener('DOMContentLoaded', () => {
     emailInfoToggle.setAttribute('aria-expanded', 'false');
     const inBin = activeFolder === 'bin' || Boolean(email.isTrash);
     const inSpam = activeFolder === 'spam' || Boolean(email.isSpam);
+    const canToggleRead = canToggleReadStatus(email);
+    if (detailsActionUnread) {
+      detailsActionUnread.style.display = canToggleRead ? 'inline-flex' : 'none';
+    }
     detailsActionRestore.style.display = inBin ? 'inline-flex' : 'none';
     detailsActionDelete.title = inBin ? 'Permanently delete' : inSpam ? 'Delete forever' : 'Move to Bin';
     detailsStarButton.style.display = (inBin || inSpam) ? 'none' : 'inline-flex';
@@ -1142,12 +1271,20 @@ document.addEventListener('DOMContentLoaded', () => {
     detailsActionSpam.style.display = canReportSpam(email) ? 'flex' : 'none';
     detailsActionNotSpam.style.display = inSpam ? 'inline-block' : 'none';
 
-    // Explain why the message was flagged
+    // Explain why the message was flagged (user-friendly, non-technical explanation)
     if (inSpam) {
-      const reasons = Array.isArray(email.spamReasons) && email.spamReasons.length > 0
+      let rawReasons = Array.isArray(email.spamReasons) && email.spamReasons.length > 0
         ? email.spamReasons
-        : ['It looks similar to messages that were previously identified as spam'];
-      spamWarningReasons.textContent = reasons.join(' • ');
+        : ['It is similar to messages that were identified as spam.'];
+
+      const friendlyReasons = rawReasons.map(r => {
+        if (/reported|blocked|preference/i.test(r)) {
+          return 'You previously reported messages from this sender as spam.';
+        }
+        return 'It is similar to messages that were identified as spam.';
+      });
+      const uniqueReasons = [...new Set(friendlyReasons)];
+      spamWarningReasons.textContent = uniqueReasons.join(' • ');
       spamWarning.style.display = 'block';
     } else {
       spamWarning.style.display = 'none';
@@ -1175,10 +1312,44 @@ document.addEventListener('DOMContentLoaded', () => {
     // Populate main message view immediately with clicked email
     populateMainEmailView(email);
 
-    // Automatically mark email as read
-    if (!email.isRead) {
-      await updateEmailStatus(email._id, { isRead: true });
+    // Automatically mark all messages in this email/thread as read
+    const targetIds = (email.threadEmailIds && email.threadEmailIds.length > 0)
+      ? email.threadEmailIds
+      : [email._id];
+
+    email.isRead = true;
+    if (Array.isArray(email.threadEmails)) {
+      email.threadEmails.forEach(e => { e.isRead = true; });
     }
+    if (Array.isArray(emailListCache)) {
+      emailListCache.forEach(cached => {
+        if (targetIds.includes(cached._id) || (cached.threadEmailIds && cached.threadEmailIds.some(tid => targetIds.includes(tid)))) {
+          cached.isRead = true;
+        }
+      });
+    }
+
+    const clickedRow = emailListUl.querySelector(`li[data-id="${email._id}"]`);
+    if (clickedRow) {
+      clickedRow.classList.remove('unread');
+      clickedRow.classList.add('read');
+      const sideBtn = clickedRow.querySelector('.btn-row-read');
+      if (sideBtn) {
+        sideBtn.className = 'action-icon-btn btn-row-unread';
+        sideBtn.title = 'Mark as unread';
+        sideBtn.setAttribute('aria-label', 'Mark as unread');
+        sideBtn.innerHTML = `
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8l8 5 8-5v10zm-8-7L4 6h16l-8 5z"/>
+          </svg>
+        `;
+      }
+    }
+
+    // Persist read state in database
+    Promise.all(targetIds.map(id => updateEmailStatus(id, { isRead: true }))).then(() => {
+      refreshInboxBadge();
+    });
 
     // Load and render all messages in this conversation thread
     await loadAndRenderThread(email);
@@ -1308,7 +1479,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const senderName = email.senderName || email.firstName || (email.sender || '').split('@')[0] || 'Unknown sender';
     const recips = formatRecipientsDisplay(email);
 
-    if (detailsSenderAvatar) detailsSenderAvatar.textContent = senderName[0].toUpperCase();
+    if (detailsSenderAvatar) {
+      detailsSenderAvatar.textContent = senderName[0].toUpperCase();
+      detailsSenderAvatar.style.backgroundColor = getAvatarColor(email.sender || senderName);
+    }
     if (detailsSenderName) detailsSenderName.textContent = senderName;
     if (detailsSenderEmail) detailsSenderEmail.textContent = email.sender ? `<${email.sender}>` : '';
     if (detailsReceiverEmail) detailsReceiverEmail.textContent = recips.shortText;
@@ -1425,6 +1599,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function createAttachmentCard(email, attachment) {
     const card = document.createElement('article');
     card.className = 'email-attachment-card';
+    card.title = `Click to preview ${attachment.filename || 'attachment'}`;
     const isImage = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(attachment.mimeType);
 
     if (isImage) {
@@ -1481,6 +1656,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const downloadButton = document.createElement('button');
     downloadButton.type = 'button';
     downloadButton.className = 'attachment-download-button';
+    downloadButton.title = 'Download file directly';
     downloadButton.innerHTML = `
       <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
         <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
@@ -1489,9 +1665,14 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
     downloadButton.addEventListener('click', (e) => {
       e.stopPropagation();
-      downloadAttachment(email, attachment);
+      downloadAttachment(email, attachment, downloadButton);
     });
     card.appendChild(downloadButton);
+
+    // Clicking the card opens Gmail-style full preview modal instead of instantly downloading
+    card.addEventListener('click', () => {
+      openAttachmentPreview(email, attachment);
+    });
 
     return card;
   }
@@ -1509,7 +1690,133 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  async function downloadAttachment(email, attachment) {
+  function openAttachmentPreview(email, attachment) {
+    if (!attachmentLightboxModal) return;
+    currentPreviewEmail = email;
+    currentPreviewAttachment = attachment;
+
+    lightboxFilename.textContent = attachment.filename || 'Attachment';
+    lightboxFilesize.textContent = formatFileSize(attachment.size);
+    lightboxSpinner.style.display = 'flex';
+    lightboxContent.replaceChildren();
+
+    const previewUrl = `${API_BASE}/emails/${email._id}/attachments/${attachment._id}/preview?token=${encodeURIComponent(authToken)}`;
+    if (btnLightboxOpenTab) {
+      btnLightboxOpenTab.href = previewUrl;
+    }
+
+    const mime = (attachment.mimeType || '').toLowerCase();
+    const isPdf = mime === 'application/pdf' || (attachment.filename && attachment.filename.toLowerCase().endsWith('.pdf'));
+    const isImg = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(mime);
+    const isTxt = ['text/plain', 'text/csv', 'application/json'].includes(mime);
+
+    if (isPdf) {
+      const iframe = document.createElement('iframe');
+      iframe.className = 'lightbox-iframe';
+      iframe.title = attachment.filename || 'PDF Preview';
+      iframe.src = previewUrl;
+      iframe.onload = () => {
+        lightboxSpinner.style.display = 'none';
+      };
+      lightboxContent.appendChild(iframe);
+    } else if (isImg) {
+      const img = document.createElement('img');
+      img.className = 'lightbox-image';
+      img.alt = attachment.filename || 'Image Preview';
+      img.src = previewUrl;
+      img.onload = () => {
+        lightboxSpinner.style.display = 'none';
+      };
+      img.onerror = () => {
+        lightboxSpinner.style.display = 'none';
+        renderUnsupportedPreview(attachment);
+      };
+      lightboxContent.appendChild(img);
+    } else if (isTxt) {
+      fetch(previewUrl, { headers: tokenHeaders() })
+        .then(res => res.text())
+        .then(txt => {
+          lightboxSpinner.style.display = 'none';
+          const pre = document.createElement('pre');
+          pre.className = 'lightbox-text-preview';
+          pre.textContent = txt;
+          lightboxContent.appendChild(pre);
+        })
+        .catch(() => {
+          lightboxSpinner.style.display = 'none';
+          renderUnsupportedPreview(attachment);
+        });
+    } else {
+      lightboxSpinner.style.display = 'none';
+      renderUnsupportedPreview(attachment);
+    }
+
+    attachmentLightboxModal.style.display = 'flex';
+  }
+
+  function renderUnsupportedPreview(attachment) {
+    lightboxContent.replaceChildren();
+    const box = document.createElement('div');
+    box.className = 'lightbox-unsupported';
+    box.innerHTML = `
+      <div class="lightbox-unsupported-icon">📄</div>
+      <h4>No preview available</h4>
+      <p style="margin: 8px 0 20px 0; color: #9aa0a6;">${attachment.filename || 'This file'} cannot be previewed directly in the browser.</p>
+    `;
+    const dlBtn = document.createElement('button');
+    dlBtn.type = 'button';
+    dlBtn.className = 'btn btn-primary';
+    dlBtn.style.padding = '10px 20px';
+    dlBtn.style.borderRadius = '6px';
+    dlBtn.textContent = 'Download File';
+    dlBtn.addEventListener('click', () => {
+      if (currentPreviewEmail && currentPreviewAttachment) {
+        downloadAttachment(currentPreviewEmail, currentPreviewAttachment, dlBtn);
+      }
+    });
+    box.appendChild(dlBtn);
+    lightboxContent.appendChild(box);
+  }
+
+  function closeAttachmentPreview() {
+    if (attachmentLightboxModal) {
+      attachmentLightboxModal.style.display = 'none';
+      lightboxContent.replaceChildren();
+      currentPreviewAttachment = null;
+      currentPreviewEmail = null;
+    }
+  }
+
+  if (btnLightboxClose) {
+    btnLightboxClose.addEventListener('click', closeAttachmentPreview);
+  }
+  if (btnLightboxDownload) {
+    btnLightboxDownload.addEventListener('click', () => {
+      if (currentPreviewEmail && currentPreviewAttachment) {
+        downloadAttachment(currentPreviewEmail, currentPreviewAttachment, btnLightboxDownload);
+      }
+    });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && attachmentLightboxModal && attachmentLightboxModal.style.display === 'flex') {
+      closeAttachmentPreview();
+    }
+  });
+  if (attachmentLightboxModal) {
+    attachmentLightboxModal.addEventListener('click', (e) => {
+      if (e.target === attachmentLightboxModal) {
+        closeAttachmentPreview();
+      }
+    });
+  }
+
+  async function downloadAttachment(email, attachment, btn) {
+    const originalContent = btn ? btn.innerHTML : null;
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="action-spinner" style="width:12px;height:12px;border-width:2px;display:inline-block;margin-right:4px;"></span> Downloading...';
+    }
+
     try {
       const response = await fetch(
         `${API_BASE}/emails/${email._id}/attachments/${attachment._id}/download`,
@@ -1519,7 +1826,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await response.json().catch(() => ({}));
         throw new Error(data.message || 'The attachment could not be downloaded.');
       }
-      const objectUrl = URL.createObjectURL(await response.blob());
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = objectUrl;
       link.download = attachment.filename || 'attachment';
@@ -1530,6 +1838,11 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       console.error('Attachment download failed:', err);
       alert(err.message);
+    } finally {
+      if (btn && originalContent !== null) {
+        btn.disabled = false;
+        btn.innerHTML = originalContent;
+      }
     }
   }
 
@@ -2027,10 +2340,22 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Details Modal: Back button
-  btnDetailsBack.addEventListener('click', () => {
+  btnDetailsBack.addEventListener('click', async () => {
     closeDetailsModal();
-    fetchEmails(activeFolder);
+    await fetchEmails(activeFolder);
   });
+
+  // Details Modal: Mark as unread button
+  if (detailsActionUnread) {
+    detailsActionUnread.addEventListener('click', async () => {
+      if (!currentOpenEmail) return;
+      const targetIds = (currentOpenEmail.threadEmailIds && currentOpenEmail.threadEmailIds.length > 0)
+        ? currentOpenEmail.threadEmailIds
+        : [currentOpenEmail._id];
+      closeDetailsModal();
+      await markEmailsUnread(targetIds);
+    });
+  }
 
   emailInfoToggle.addEventListener('click', () => {
     const isExpanded = emailInfoToggle.getAttribute('aria-expanded') === 'true';
@@ -2944,13 +3269,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const senderDisplayName = email.senderName || email.firstName || (email.sender || '').split('@')[0] || 'Unknown';
       const senderInitial = senderDisplayName.charAt(0).toUpperCase();
+      const senderColor = getAvatarColor(email.sender || senderDisplayName);
       const detailedTime = formatDetailedTimestamp(email.timestamp);
       const recips = formatRecipientsDisplay(email);
 
       const headerRow = document.createElement('div');
       headerRow.className = 'thread-message-header';
       headerRow.innerHTML = `
-        <div class="thread-sender-avatar">${escapeHtml(senderInitial)}</div>
+        <div class="thread-sender-avatar" style="background-color: ${senderColor}; color: #ffffff;">${escapeHtml(senderInitial)}</div>
         <div class="thread-sender-meta">
           <div class="thread-sender-row">
             <span class="thread-sender-name">${escapeHtml(senderDisplayName)}</span>
@@ -3046,6 +3372,17 @@ document.addEventListener('DOMContentLoaded', () => {
       return true;
     });
 
+    // Ensure all fetched messages in the opened thread are marked as read in database & memory
+    const unreadThreadMsgIds = currentThreadEmails.filter(e => !e.isRead && !e.isDraft).map(e => e._id);
+    if (unreadThreadMsgIds.length > 0) {
+      currentThreadEmails.forEach(e => {
+        if (!e.isDraft) e.isRead = true;
+      });
+      Promise.all(unreadThreadMsgIds.map(id => updateEmailStatus(id, { isRead: true }))).then(() => {
+        refreshInboxBadge();
+      });
+    }
+
     const inBin = activeFolder === 'bin' || Boolean(targetEmail && targetEmail.isTrash);
     const inSpam = activeFolder === 'spam' || Boolean(targetEmail && targetEmail.isSpam);
 
@@ -3113,6 +3450,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
           const senderDisplayName = email.senderName || email.firstName || (email.sender || '').split('@')[0] || 'Unknown';
           const senderInitial = senderDisplayName.charAt(0).toUpperCase();
+          const senderColor = getAvatarColor(email.sender || senderDisplayName);
           const shortTime = formatTimestamp(email.timestamp);
           const detailedTime = formatDetailedTimestamp(email.timestamp);
           const recips = formatRecipientsDisplay(email);
@@ -3121,7 +3459,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const collapsedRow = document.createElement('div');
           collapsedRow.className = 'thread-message-collapsed-row';
           collapsedRow.innerHTML = `
-            <div class="thread-collapsed-avatar">${escapeHtml(senderInitial)}</div>
+            <div class="thread-collapsed-avatar" style="background-color: ${senderColor}; color: #ffffff;">${escapeHtml(senderInitial)}</div>
             <span class="thread-collapsed-name">${escapeHtml(senderDisplayName)}</span>
             <span class="thread-collapsed-snippet">${escapeHtml((email.body || '').replace(/\\s+/g, ' ').slice(0, 100))}</span>
             <span class="thread-collapsed-time">${escapeHtml(shortTime)}</span>
@@ -3151,7 +3489,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const headerRow = document.createElement('div');
           headerRow.className = 'thread-message-header';
           headerRow.innerHTML = `
-            <div class="thread-sender-avatar">${escapeHtml(senderInitial)}</div>
+            <div class="thread-sender-avatar" style="background-color: ${senderColor}; color: #ffffff;">${escapeHtml(senderInitial)}</div>
             <div class="thread-sender-meta">
               <div class="thread-sender-row">
                 <span class="thread-sender-name">${escapeHtml(senderDisplayName)}</span>
@@ -3763,8 +4101,37 @@ document.addEventListener('DOMContentLoaded', () => {
     selectedEmailIds.clear();
     selectAllCheckbox.checked = false;
     updateDeleteButtonState();
-    await markEmailsUnread(ids);
+    const allIds = [];
+    ids.forEach(id => {
+      const found = emailListCache.find(e => String(e._id) === String(id));
+      if (found && found.threadEmailIds && found.threadEmailIds.length > 0) {
+        allIds.push(...found.threadEmailIds);
+      } else {
+        allIds.push(id);
+      }
+    });
+    await markEmailsUnread([...new Set(allIds)]);
   });
+
+  if (readActionBarBtn) {
+    readActionBarBtn.addEventListener('click', async () => {
+      if (readActionBarBtn.disabled || selectedEmailIds.size === 0) return;
+      const ids = Array.from(selectedEmailIds);
+      selectedEmailIds.clear();
+      selectAllCheckbox.checked = false;
+      updateDeleteButtonState();
+      const allIds = [];
+      ids.forEach(id => {
+        const found = emailListCache.find(e => String(e._id) === String(id));
+        if (found && found.threadEmailIds && found.threadEmailIds.length > 0) {
+          allIds.push(...found.threadEmailIds);
+        } else {
+          allIds.push(id);
+        }
+      });
+      await markEmailsRead([...new Set(allIds)]);
+    });
+  }
 
   // Bulk Restore toolbar button (Bin only)
   restoreActionBarBtn.addEventListener('click', async () => {
@@ -3851,14 +4218,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     restoreActionBarBtn.disabled = !hasSelection;
     restoreActionBarBtn.style.display = activeFolder === 'bin' ? 'flex' : 'none';
-    const hasUnreadEligibleSelection = UNREAD_ACTION_FOLDERS.includes(activeFolder)
+    const hasUnreadEligibleSelection = (UNREAD_ACTION_FOLDERS.includes(activeFolder) || Boolean(activeLabelId))
       && emailListCache.some(email =>
         selectedEmailIds.has(String(email._id))
-        && canMarkUnread(email)
+        && canToggleReadStatus(email)
         && email.isRead
       );
     unreadActionBarBtn.style.display = hasUnreadEligibleSelection ? 'flex' : 'none';
     unreadActionBarBtn.disabled = !hasUnreadEligibleSelection;
+
+    const hasReadEligibleSelection = (UNREAD_ACTION_FOLDERS.includes(activeFolder) || Boolean(activeLabelId))
+      && emailListCache.some(email =>
+        selectedEmailIds.has(String(email._id))
+        && canToggleReadStatus(email)
+        && !email.isRead
+      );
+    if (readActionBarBtn) {
+      readActionBarBtn.style.display = hasReadEligibleSelection ? 'flex' : 'none';
+      readActionBarBtn.disabled = !hasReadEligibleSelection;
+    }
     deleteActionBarBtn.title = activeFolder === 'bin'
       ? 'Permanently delete'
       : activeFolder === 'spam' ? 'Delete forever' : 'Move to Bin';

@@ -32,13 +32,14 @@ function requireAuth(req, res, next) {
 function requireTokenAuth(req, res, next) {
   const authorization = req.headers.authorization || '';
   const tokenMatch = authorization.match(/^Bearer\s+(.+)$/i);
+  const token = tokenMatch ? tokenMatch[1] : (req.query.token || null);
 
-  if (!tokenMatch) {
+  if (!token) {
     return res.status(401).json({ message: 'A valid sign-in token is required' });
   }
 
   try {
-    const payload = jwt.verify(tokenMatch[1], process.env.JWT_SECRET, {
+    const payload = jwt.verify(token, process.env.JWT_SECRET, {
       algorithms: ['HS256'],
       issuer: 'inboxflow'
     });

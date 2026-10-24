@@ -28,6 +28,7 @@ router.patch('/:id/star', emailController.starEmail);
 router.patch('/:id/unstar', emailController.unstarEmail);
 router.patch('/:id/toggle-starred', emailController.toggleStarredEmail);
 router.patch('/:id/draft', requireTokenAuth, emailController.updateDraft);
+router.patch('/:id/read', requireAuth, emailController.markEmailRead);
 router.patch('/:id/unread', requireAuth, emailController.markEmailUnread);
 router.patch('/:id/report-spam', requireAuth, emailController.reportSpam);
 router.patch('/:id/not-spam', requireAuth, emailController.markNotSpam);

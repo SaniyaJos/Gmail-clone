@@ -15,6 +15,7 @@ const emailRoutes = require('./routes/emailRoutes');
 const taskRoutes = require('./routes/taskRoutes');
 const labelRoutes = require('./routes/labelRoutes');
 const { startCleanupScheduler } = require('./services/cleanupService');
+const { syncLocalUploadsToGridFS } = require('./services/attachmentStorage');
 
 // ==========================================
 // 1. APP INITIALIZATION & CONFIGURATION
@@ -50,6 +51,8 @@ mongoose.connect(MONGODB_URI)
     console.log('Successfully connected to MongoDB Atlas cluster!');
     // Auto-delete Bin/Spam emails older than 30 days (runs now, then hourly)
     startCleanupScheduler();
+    // Sync any local disk uploads to MongoDB GridFS so all team members can access them
+    syncLocalUploadsToGridFS();
   })
   .catch((err) => {
     console.error('Error connecting to MongoDB Atlas:', err.message);
