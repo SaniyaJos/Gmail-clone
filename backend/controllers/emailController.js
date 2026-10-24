@@ -644,6 +644,27 @@ async function findOwnedEmail(req, res) {
 }
 
 /**
+ * PATCH /api/emails/:id/unread
+ * Marks an email as unread for its owner.
+ */
+async function markEmailUnread(req, res) {
+  try {
+    const email = await findOwnedEmail(req, res);
+    if (!email) return;
+    if (email.isDraft) {
+      return res.status(400).json({ message: 'Drafts cannot be marked as unread' });
+    }
+
+    email.isRead = false;
+    await email.save();
+    return res.status(200).json({ message: 'Message marked as unread', email });
+  } catch (err) {
+    console.error('Mark unread error:', err);
+    return res.status(500).json({ message: 'Internal server error while marking email as unread' });
+  }
+}
+
+/**
  * PATCH /api/emails/:id/report-spam
  * Moves an email to Spam and remembers the sender, so future mail from
  * the same sender is delivered straight to Spam.
@@ -931,6 +952,7 @@ module.exports = {
   updateEmail,
   updateDraft,
   deleteEmail,
+  markEmailUnread,
   reportSpam,
   markNotSpam,
   emptyFolder,

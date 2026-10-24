@@ -151,6 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const selectAllCheckbox = document.getElementById('select-all');
   const deleteActionBarBtn = document.getElementById('action-delete');
   const restoreActionBarBtn = document.getElementById('action-restore');
+  const unreadActionBarBtn = document.getElementById('action-unread');
   const refreshActionBarBtn = document.getElementById('action-refresh');
   const spamActionBarBtn = document.getElementById('action-spam');
   const notSpamActionBarBtn = document.getElementById('action-not-spam');
@@ -669,8 +670,33 @@ document.addEventListener('DOMContentLoaded', () => {
     return patchEmailAction(id, 'not-spam');
   }
 
+  function markUnread(id) {
+    return patchEmailAction(id, 'unread');
+  }
+
+  async function markEmailsUnread(ids) {
+    const results = await Promise.all(ids.map(markUnread));
+    const failed = results.some(result => !result.ok);
+    if (failed) alert('Some messages could not be marked as unread.');
+    await Promise.all([
+      fetchEmails(activeFolder),
+      refreshInboxBadge(),
+      refreshSpamBadge()
+    ]);
+    return !failed;
+  }
+
   // Folders where "Report spam" is available (Bin included: reporting moves the mail out of Bin into Spam)
   const REPORT_SPAM_FOLDERS = ['inbox', 'starred', 'all', 'bin'];
+  const UNREAD_ACTION_FOLDERS = ['inbox', 'starred', 'sent', 'all'];
+
+  function canMarkUnread(email) {
+    return Boolean(email)
+      && !email.isDraft
+      && !email.isTrash
+      && !email.isSpam
+      && UNREAD_ACTION_FOLDERS.includes(activeFolder);
+  }
 
   // Only mail received from someone else can be reported, and only from the folders above
   function canReportSpam(email) {
@@ -914,10 +940,16 @@ document.addEventListener('DOMContentLoaded', () => {
           </button>
         `;
       } else {
+        const unreadBtn = email.isRead && canMarkUnread(email)
+          ? `<button class="action-icon-btn btn-row-unread" data-id="${email._id}" title="Mark as unread" aria-label="Mark as unread">
+              <img src="images/envelope-regular-full.svg" alt="" class="row-action-icon-img">
+            </button>`
+          : '';
         const reportBtn = canReportSpam(email)
           ? `<button class="action-icon-btn btn-row-spam" data-id="${email._id}" title="Report spam">${SPAM_ICON_SVG}</button>`
           : '';
         rowActions = `
+          ${unreadBtn}
           ${reportBtn}
           <button class="action-icon-btn btn-row-delete" data-id="${email._id}" title="Move to Bin">
             <img src="images/trash-can-regular-full.svg" alt="Move to Bin" class="row-action-icon-img">
@@ -1054,6 +1086,14 @@ document.addEventListener('DOMContentLoaded', () => {
           const { ok } = await markNotSpam(email._id);
           if (!ok) alert('Could not move this message to the Inbox. Please try again.');
           fetchEmails(activeFolder);
+        });
+      }
+
+      const unreadBtn = li.querySelector('.btn-row-unread');
+      if (unreadBtn) {
+        unreadBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          await markEmailsUnread(email.threadEmailIds || [email._id]);
         });
       }
 
@@ -3717,6 +3757,15 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchEmails(activeFolder);
   });
 
+  unreadActionBarBtn.addEventListener('click', async () => {
+    if (unreadActionBarBtn.disabled || selectedEmailIds.size === 0) return;
+    const ids = Array.from(selectedEmailIds);
+    selectedEmailIds.clear();
+    selectAllCheckbox.checked = false;
+    updateDeleteButtonState();
+    await markEmailsUnread(ids);
+  });
+
   // Bulk Restore toolbar button (Bin only)
   restoreActionBarBtn.addEventListener('click', async () => {
     if (activeFolder !== 'bin' || selectedEmailIds.size === 0) return;
@@ -3802,6 +3851,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     restoreActionBarBtn.disabled = !hasSelection;
     restoreActionBarBtn.style.display = activeFolder === 'bin' ? 'flex' : 'none';
+    const hasUnreadEligibleSelection = UNREAD_ACTION_FOLDERS.includes(activeFolder)
+      && emailListCache.some(email =>
+        selectedEmailIds.has(String(email._id))
+        && canMarkUnread(email)
+        && email.isRead
+      );
+    unreadActionBarBtn.style.display = hasUnreadEligibleSelection ? 'flex' : 'none';
+    unreadActionBarBtn.disabled = !hasUnreadEligibleSelection;
     deleteActionBarBtn.title = activeFolder === 'bin'
       ? 'Permanently delete'
       : activeFolder === 'spam' ? 'Delete forever' : 'Move to Bin';

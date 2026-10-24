@@ -7,6 +7,7 @@
   <script src="theme.js"></script>
   <link rel="stylesheet" href="inbox.css?v=17">
   <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="inbox-guide.css">
   <!-- Google Fonts: Roboto and Outfit -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -51,7 +52,7 @@
       </div>
       
       <div class="header-right">
-        <button class="icon-btn" aria-label="Help">
+        <button class="icon-btn" id="inboxflow-help-button" aria-label="Help">
           <img src="images/question-svgrepo-com.svg" alt="Help" class="header-right-icon">
         </button>
         <button class="icon-btn" aria-label="Settings">
@@ -152,6 +153,9 @@
             </button>
             <button class="action-icon-btn" id="action-restore" title="Restore selected messages" disabled style="display: none;">
               <span class="restore-icon" aria-hidden="true">&#8630;</span>
+            </button>
+            <button class="action-icon-btn" id="action-unread" title="Mark as unread" aria-label="Mark as unread" disabled style="display: none;">
+              <img src="images/envelope-regular-full.svg" alt="" class="action-bar-icon-img">
             </button>
             <button class="action-icon-btn" id="action-spam" title="Report spam" disabled style="display: none;">
               <svg class="action-svg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -496,5 +500,6 @@
   </div>
 
   <script src="inbox.js?v=27"></script>
+  <script src="inbox-guide.js"></script>
 </body>
 </html>

@@ -11,6 +11,7 @@ A web-based Gmail Clone built with HTML, CSS, JavaScript, Node.js, Express, and 
 - Auto-Delete: Bin and Spam emails are permanently deleted after 30 days (backend cleanup job), plus an "Empty Bin now" button
 - Email attachments with private storage, authenticated downloads, and message details
 - User-owned custom labels with persistent email associations, bulk actions, and label filtering
+- Searchable in-app InboxFlow Guide with a guided tour and account-scoped first-time onboarding
 
 ## Project Structure
 ```text
@@ -23,6 +24,7 @@ Gmail/
 ├── inbox.html            # Main Inbox Interface
 ├── inbox.js              # Inbox Features & API Integration
 ├── inbox.css / style.css # Styling
+├── inbox-guide.js / inbox-guide.css # In-app feature guide and guided tour
 ├── images/               # Assets and UI icons
 └── backend/              # Express + MongoDB API Server
     ├── models/           # Mongoose Data Schemas (User, Email, etc.)

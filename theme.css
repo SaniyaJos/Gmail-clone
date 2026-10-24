@@ -305,7 +305,7 @@ html[data-theme="dark"] .compose-btn-icon {
 }
 
 html[data-theme="dark"] .header-avatar-img {
-  filter: brightness(.85);
+  filter: brightness(0) invert(.82);
 }
 
 html[data-theme="dark"] .icon-btn:hover .sidebar-toggle-icon,
