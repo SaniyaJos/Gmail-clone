@@ -989,13 +989,6 @@ body {
   color: var(--color-text-medium);
 }
 
-.receiver-row {
-  margin-top: 2px;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-
 .receiver-email {
   font-size: 13px;
   color: var(--color-text-medium);
@@ -2762,6 +2755,7 @@ body {
 
 /* Open-message recipient details */
 .receiver-row {
+  margin-top: 2px;
   display: flex;
   align-items: center;
   gap: 3px;

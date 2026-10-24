@@ -76,6 +76,44 @@ function addExpiryInfo(emails, folder) {
   });
 }
 
+function buildLegacyThreadFilter(email, owner) {
+  const cleanSubject = (email.subject || '')
+    .replace(/^(re:\s*|fwd:\s*)+/ig, '')
+    .trim();
+  const isNoSubject = !cleanSubject ||
+    cleanSubject.toLowerCase() === '(no subject)' ||
+    cleanSubject.toLowerCase() === 'no subject';
+
+  if (isNoSubject) return null;
+
+  const participants = [...new Set(
+    [email.sender, ...(email.receiver || '').split(',')]
+      .map(address => (address || '').trim().toLowerCase())
+      .filter(Boolean)
+  )];
+  if (!participants.length) return null;
+
+  const subjectRegex = new RegExp(
+    `^(re:\\s*|fwd:\\s*)*${cleanSubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
+    'i'
+  );
+  const participantAlternation = participants
+    .map(address => address.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|');
+  const receiverRegex = new RegExp(`(^|,\\s*)(${participantAlternation})($|,\\s*)`, 'i');
+
+  return {
+    owner,
+    threadId: null,
+    subject: subjectRegex,
+    $or: [
+      { sender: { $in: participants } },
+      { receiver: { $in: participants } },
+      { receiver: receiverRegex }
+    ]
+  };
+}
+
 // ==========================================
 // 2. EMAIL CREATION & SENDING
 // ==========================================
@@ -741,45 +779,17 @@ async function getEmailThread(req, res) {
     }
 
     let threadEmails = [];
+    const threadId = baseEmail.threadId || baseEmail._id;
 
-    if (baseEmail.threadId) {
-      // Find all emails for this user belonging to the same threadId
-      threadEmails = await Email.find({
-        owner: req.user.email,
-        threadId: baseEmail.threadId
-      })
-      .sort({ timestamp: 1 })
-      .lean();
-    } else {
-      // Fallback ONLY for legacy emails created before threadId existed:
-      // Group by normalized subject and participants (ignoring No Subject)
-      const cleanSubject = (baseEmail.subject || '')
-        .replace(/^(re:\s*|fwd:\s*)+/ig, '')
-        .trim();
-
-      const isNoSubject = !cleanSubject ||
-        cleanSubject.toLowerCase() === '(no subject)' ||
-        cleanSubject.toLowerCase() === 'no subject';
-
-      if (!isNoSubject) {
-        const subjectRegex = new RegExp(`^(re:\\s*|fwd:\\s*)*${cleanSubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
-        const participants = [baseEmail.sender, baseEmail.receiver].filter(Boolean);
-        const legacyMatches = await Email.find({
-          owner: req.user.email,
-          threadId: null,
-          subject: subjectRegex,
-          $or: [
-            { sender: { $in: participants } },
-            { receiver: { $in: participants } }
-          ]
-        })
+    const [threadMatches, legacyMatches] = await Promise.all([
+      Email.find({ owner: req.user.email, threadId }).sort({ timestamp: 1 }).lean(),
+      Email.find(buildLegacyThreadFilter(baseEmail, req.user.email) || { _id: baseEmail._id })
         .sort({ timestamp: 1 })
-        .lean();
-
-        if (legacyMatches && legacyMatches.length > 0) {
-          threadEmails = legacyMatches;
-        }
-      }
+        .lean()
+    ]);
+    threadEmails = [...threadMatches, ...legacyMatches];
+    if (!threadEmails.some(email => String(email._id) === String(baseEmail._id))) {
+      threadEmails.push(baseEmail);
     }
 
     if (threadEmails.length === 0) {
@@ -801,7 +811,7 @@ async function getEmailThread(req, res) {
     }
 
     return res.status(200).json({
-      threadId: baseEmail.threadId || (uniqueThread[0] ? uniqueThread[0]._id : baseEmail._id),
+      threadId,
       count: uniqueThread.length,
       emails: uniqueThread
     });

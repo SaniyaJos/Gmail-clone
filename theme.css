@@ -495,6 +495,142 @@ html[data-theme="dark"] .thread-deleted-forever-wrap {
   color: #bdc1c6;
 }
 
+html[data-theme="dark"] .footer,
+html[data-theme="dark"] .folder-banner,
+html[data-theme="dark"] .search-filter-actions button,
+html[data-theme="dark"] .thread-message-card,
+html[data-theme="dark"] .email-attachment-card,
+html[data-theme="dark"] .task-card {
+  background-color: #292a2d;
+  color: #e8eaed;
+  border-color: #454a50;
+}
+
+html[data-theme="dark"] .thread-message-card.collapsed {
+  background-color: #3c4043;
+  border-color: #5f6368;
+}
+
+html[data-theme="dark"] .thread-message-card.collapsed:hover {
+  background-color: #303134;
+}
+
+html[data-theme="dark"] .task-card.completed {
+  background-color: #303134;
+  border-color: #5f4545;
+}
+
+html[data-theme="dark"] .task-reason {
+  background-color: #3c4043;
+  color: #bdc1c6;
+}
+
+html[data-theme="dark"] .actions-empty-icon,
+html[data-theme="dark"] .empty-icon.is-good {
+  background-color: #203d30;
+  color: #a8dab5;
+}
+
+html[data-theme="dark"] .sender-avatar,
+html[data-theme="dark"] .thread-collapsed-avatar {
+  background-color: #3c4043;
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .task-checkbox {
+  background-color: #202124;
+  border-color: #9aa0a6;
+}
+
+html[data-theme="dark"] .task-checkbox:checked {
+  background-color: #8ab4f8;
+  border-color: #8ab4f8;
+}
+
+html[data-theme="dark"] .tasks-section-badge,
+html[data-theme="dark"] .priority-low {
+  background-color: #26394f;
+  border-color: #3d5877;
+  color: #a8c7fa;
+}
+
+html[data-theme="dark"] .priority-high,
+html[data-theme="dark"] .task-email-ref.in-spam,
+html[data-theme="dark"] .thread-message-card.deleted-card {
+  background-color: #4a2929;
+  border-color: #714040;
+  color: #f4b8b4;
+}
+
+html[data-theme="dark"] .thread-bin-badge {
+  background-color: #4a2929 !important;
+  border-color: #714040;
+  color: #f4b8b4 !important;
+}
+
+html[data-theme="dark"] .priority-medium,
+html[data-theme="dark"] .task-email-ref.in-trash {
+  background-color: #493d24;
+  border-color: #69572d;
+  color: #f9e7b4;
+}
+
+html[data-theme="dark"] .status-chip.completed {
+  background-color: #203d30;
+  border-color: #345b47;
+  color: #a8dab5;
+}
+
+html[data-theme="dark"] .task-description,
+html[data-theme="dark"] .task-title,
+html[data-theme="dark"] .actions-panel-title,
+html[data-theme="dark"] .actions-panel-subtitle,
+html[data-theme="dark"] .chip-text,
+html[data-theme="dark"] .chip-close,
+html[data-theme="dark"] .to-label,
+html[data-theme="dark"] .thread-deleted-text,
+html[data-theme="dark"] .thread-deleted-link {
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .task-card.completed .task-description,
+html[data-theme="dark"] .task-card.completed .task-reason,
+html[data-theme="dark"] .task-email-ref.deleted,
+html[data-theme="dark"] .btn-re-extract {
+  color: #bdc1c6;
+}
+
+html[data-theme="dark"] .folder-banner-btn:hover,
+html[data-theme="dark"] .compose-attachment-remove:hover,
+html[data-theme="dark"] .compose-attach-button:hover,
+html[data-theme="dark"] .email-info-toggle:hover {
+  background-color: #3c4043;
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .thread-deleted-banner {
+  background-color: #303134;
+  border-color: #454a50;
+}
+
+html[data-theme="dark"] .details-sender-info.has-previous-messages {
+  border-top-color: #454a50;
+}
+
+html[data-theme="dark"] .compose-attachment-remove,
+html[data-theme="dark"] .attachment-download-button,
+html[data-theme="dark"] .email-attachment-download {
+  color: #a8c7fa;
+}
+
+html[data-theme="dark"] .gmail-quote {
+  border-left-color: #5f6368;
+}
+
+html[data-theme="dark"] .strength-bar-wrapper {
+  background-color: #3c4043;
+}
+
 @media (max-width: 600px) {
   .theme-toggle {
     min-height: 36px;
