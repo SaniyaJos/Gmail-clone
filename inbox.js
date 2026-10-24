@@ -266,20 +266,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const emailAttachmentsSection = document.getElementById('email-attachments');
   const emailAttachmentsList = document.getElementById('email-attachments-list');
 
-  // Attachment Preview Lightbox Elements
-  const attachmentLightboxModal = document.getElementById('attachment-lightbox-modal');
-  const btnLightboxClose = document.getElementById('btn-lightbox-close');
-  const btnLightboxDownload = document.getElementById('btn-lightbox-download');
-  const btnLightboxOpenTab = document.getElementById('btn-lightbox-open-tab');
-  const lightboxFilename = document.getElementById('lightbox-filename');
-  const lightboxFilesize = document.getElementById('lightbox-filesize');
-  const lightboxSpinner = document.getElementById('lightbox-spinner');
-  const lightboxContent = document.getElementById('lightbox-content');
-  const lightboxDownloadText = document.getElementById('lightbox-download-text');
-
-  let currentPreviewAttachment = null;
-  let currentPreviewEmail = null;
-
   // Email-to-Action Engine DOM Elements
   const btnExtractActions = document.getElementById('btn-extract-actions');
   const btnExtractText = document.getElementById('btn-extract-text');
@@ -351,6 +337,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       renderLabelSidebar();
       if (currentOpenEmail) renderEmailLabelOptions();
+      if (Array.isArray(emailListCache) && emailListCache.length > 0) {
+        renderEmailList(emailListCache);
+      }
     } catch (err) {
       console.error('Error loading labels:', err);
       setLabelFeedback(err.message, true);
@@ -1599,7 +1588,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function createAttachmentCard(email, attachment) {
     const card = document.createElement('article');
     card.className = 'email-attachment-card';
-    card.title = `Click to preview ${attachment.filename || 'attachment'}`;
+    card.title = `Click to download ${attachment.filename || 'attachment'}`;
     const isImage = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(attachment.mimeType);
 
     if (isImage) {
@@ -1656,7 +1645,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const downloadButton = document.createElement('button');
     downloadButton.type = 'button';
     downloadButton.className = 'attachment-download-button';
-    downloadButton.title = 'Download file directly';
+    downloadButton.title = 'Download file';
     downloadButton.innerHTML = `
       <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
         <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
@@ -1669,9 +1658,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     card.appendChild(downloadButton);
 
-    // Clicking the card opens Gmail-style full preview modal instead of instantly downloading
+    // Clicking anywhere on the card directly downloads the file
     card.addEventListener('click', () => {
-      openAttachmentPreview(email, attachment);
+      downloadAttachment(email, attachment, downloadButton);
     });
 
     return card;
@@ -1687,126 +1676,6 @@ document.addEventListener('DOMContentLoaded', () => {
     attachments.forEach(attachment => {
       const card = createAttachmentCard(email, attachment);
       emailAttachmentsList.appendChild(card);
-    });
-  }
-
-  function openAttachmentPreview(email, attachment) {
-    if (!attachmentLightboxModal) return;
-    currentPreviewEmail = email;
-    currentPreviewAttachment = attachment;
-
-    lightboxFilename.textContent = attachment.filename || 'Attachment';
-    lightboxFilesize.textContent = formatFileSize(attachment.size);
-    lightboxSpinner.style.display = 'flex';
-    lightboxContent.replaceChildren();
-
-    const previewUrl = `${API_BASE}/emails/${email._id}/attachments/${attachment._id}/preview?token=${encodeURIComponent(authToken)}`;
-    if (btnLightboxOpenTab) {
-      btnLightboxOpenTab.href = previewUrl;
-    }
-
-    const mime = (attachment.mimeType || '').toLowerCase();
-    const isPdf = mime === 'application/pdf' || (attachment.filename && attachment.filename.toLowerCase().endsWith('.pdf'));
-    const isImg = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(mime);
-    const isTxt = ['text/plain', 'text/csv', 'application/json'].includes(mime);
-
-    if (isPdf) {
-      const iframe = document.createElement('iframe');
-      iframe.className = 'lightbox-iframe';
-      iframe.title = attachment.filename || 'PDF Preview';
-      iframe.src = previewUrl;
-      iframe.onload = () => {
-        lightboxSpinner.style.display = 'none';
-      };
-      lightboxContent.appendChild(iframe);
-    } else if (isImg) {
-      const img = document.createElement('img');
-      img.className = 'lightbox-image';
-      img.alt = attachment.filename || 'Image Preview';
-      img.src = previewUrl;
-      img.onload = () => {
-        lightboxSpinner.style.display = 'none';
-      };
-      img.onerror = () => {
-        lightboxSpinner.style.display = 'none';
-        renderUnsupportedPreview(attachment);
-      };
-      lightboxContent.appendChild(img);
-    } else if (isTxt) {
-      fetch(previewUrl, { headers: tokenHeaders() })
-        .then(res => res.text())
-        .then(txt => {
-          lightboxSpinner.style.display = 'none';
-          const pre = document.createElement('pre');
-          pre.className = 'lightbox-text-preview';
-          pre.textContent = txt;
-          lightboxContent.appendChild(pre);
-        })
-        .catch(() => {
-          lightboxSpinner.style.display = 'none';
-          renderUnsupportedPreview(attachment);
-        });
-    } else {
-      lightboxSpinner.style.display = 'none';
-      renderUnsupportedPreview(attachment);
-    }
-
-    attachmentLightboxModal.style.display = 'flex';
-  }
-
-  function renderUnsupportedPreview(attachment) {
-    lightboxContent.replaceChildren();
-    const box = document.createElement('div');
-    box.className = 'lightbox-unsupported';
-    box.innerHTML = `
-      <div class="lightbox-unsupported-icon">📄</div>
-      <h4>No preview available</h4>
-      <p style="margin: 8px 0 20px 0; color: #9aa0a6;">${attachment.filename || 'This file'} cannot be previewed directly in the browser.</p>
-    `;
-    const dlBtn = document.createElement('button');
-    dlBtn.type = 'button';
-    dlBtn.className = 'btn btn-primary';
-    dlBtn.style.padding = '10px 20px';
-    dlBtn.style.borderRadius = '6px';
-    dlBtn.textContent = 'Download File';
-    dlBtn.addEventListener('click', () => {
-      if (currentPreviewEmail && currentPreviewAttachment) {
-        downloadAttachment(currentPreviewEmail, currentPreviewAttachment, dlBtn);
-      }
-    });
-    box.appendChild(dlBtn);
-    lightboxContent.appendChild(box);
-  }
-
-  function closeAttachmentPreview() {
-    if (attachmentLightboxModal) {
-      attachmentLightboxModal.style.display = 'none';
-      lightboxContent.replaceChildren();
-      currentPreviewAttachment = null;
-      currentPreviewEmail = null;
-    }
-  }
-
-  if (btnLightboxClose) {
-    btnLightboxClose.addEventListener('click', closeAttachmentPreview);
-  }
-  if (btnLightboxDownload) {
-    btnLightboxDownload.addEventListener('click', () => {
-      if (currentPreviewEmail && currentPreviewAttachment) {
-        downloadAttachment(currentPreviewEmail, currentPreviewAttachment, btnLightboxDownload);
-      }
-    });
-  }
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && attachmentLightboxModal && attachmentLightboxModal.style.display === 'flex') {
-      closeAttachmentPreview();
-    }
-  });
-  if (attachmentLightboxModal) {
-    attachmentLightboxModal.addEventListener('click', (e) => {
-      if (e.target === attachmentLightboxModal) {
-        closeAttachmentPreview();
-      }
     });
   }
 
@@ -4399,7 +4268,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================
   // 12. APP INITIALIZATION
   // ==========================================
-  fetchEmails(activeFolder);
+  loadLabels().finally(() => {
+    fetchEmails(activeFolder);
+  });
   refreshInboxBadge();
   refreshActionsBadge();
   refreshSpamBadge();
