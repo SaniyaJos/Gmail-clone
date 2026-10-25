@@ -1,0 +1,597 @@
+.inboxflow-guide,
+.inboxflow-tour {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  font-family: var(--font-family, Arial, sans-serif);
+}
+
+#inboxflow-help-button {
+  position: relative;
+  z-index: 1003;
+}
+
+.inboxflow-guide[hidden],
+.inboxflow-tour[hidden],
+.inboxflow-guide [hidden],
+.inboxflow-tour [hidden] {
+  display: none !important;
+}
+
+.inboxflow-guide-backdrop,
+.inboxflow-tour-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgb(32 33 36 / 58%);
+}
+
+.inboxflow-guide-dialog,
+.inboxflow-tour-card {
+  position: relative;
+  z-index: 1;
+  width: min(880px, 100%);
+  max-height: min(780px, calc(100vh - 48px));
+  overflow: hidden;
+  border: 1px solid var(--color-border, #dadce0);
+  border-radius: 20px;
+  background: var(--color-card-bg, #fff);
+  color: var(--color-text-dark, #202124);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 24%);
+}
+
+.inboxflow-guide-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 68px;
+  padding: 14px 20px 14px 24px;
+  border-bottom: 1px solid var(--color-border, #dadce0);
+}
+
+.inboxflow-guide-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.inboxflow-guide-mark {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--color-light-blue-bg, #e8f0fe);
+  color: var(--color-primary-blue, #0b57d0);
+  font-size: 22px;
+}
+
+.inboxflow-guide-title {
+  margin: 0;
+  color: inherit;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.inboxflow-guide-kicker {
+  margin: 2px 0 0;
+  color: var(--color-text-medium, #5f6368);
+  font-size: 12px;
+}
+
+.inboxflow-guide-close,
+.inboxflow-tour-close {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 24px;
+}
+
+.inboxflow-guide-close:hover,
+.inboxflow-tour-close:hover {
+  background: var(--color-hover-nav-bg, #f2f3f4);
+}
+
+.inboxflow-guide-content {
+  max-height: calc(min(780px, 100vh - 48px) - 69px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.inboxflow-guide-welcome {
+  padding: clamp(24px, 6vw, 56px);
+}
+
+.inboxflow-guide-eyebrow {
+  margin-bottom: 12px;
+  color: var(--color-primary-blue, #0b57d0);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.inboxflow-guide-welcome h3,
+.inboxflow-guide-detail h3 {
+  margin: 0;
+  font-size: clamp(26px, 4vw, 36px);
+  line-height: 1.2;
+}
+
+.inboxflow-guide-lead {
+  max-width: 620px;
+  margin: 12px 0 22px;
+  color: var(--color-text-medium, #5f6368);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.inboxflow-guide-context,
+.inboxflow-guide-tip {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--color-hover-nav-bg, #f2f3f4);
+  color: var(--color-text-medium, #5f6368);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.inboxflow-guide-actions,
+.inboxflow-guide-detail-actions,
+.inboxflow-tour-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.inboxflow-guide-button {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border: 1px solid var(--color-border, #dadce0);
+  border-radius: 999px;
+  background: var(--color-card-bg, #fff);
+  color: var(--color-text-dark, #202124);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.inboxflow-guide-button:hover:not(:disabled) {
+  background: var(--color-hover-nav-bg, #f2f3f4);
+}
+
+.inboxflow-guide-button:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.inboxflow-guide-button-primary {
+  border-color: var(--color-primary-blue, #0b57d0);
+  background: var(--color-primary-blue, #0b57d0);
+  color: #fff;
+}
+
+.inboxflow-guide-button-primary:hover:not(:disabled) {
+  filter: brightness(.96);
+  background: var(--color-primary-blue, #0b57d0);
+  color: #fff;
+}
+
+.inboxflow-guide-directory {
+  display: grid;
+  min-height: 460px;
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+
+.inboxflow-guide-sidebar {
+  padding: 18px 12px;
+  border-right: 1px solid var(--color-border, #dadce0);
+  background: var(--color-bg-page, #f8fafd);
+}
+
+.inboxflow-guide-back-menu-btn {
+  width: 100%;
+  margin-bottom: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-weight: 500;
+  border-radius: 8px;
+  background-color: var(--color-card-bg, #ffffff);
+  border: 1px solid var(--color-border, #dadce0);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.inboxflow-guide-back-menu-btn:hover {
+  background-color: var(--color-light-blue-bg, #e8f0fe);
+  color: var(--color-primary-blue, #0b57d0);
+  border-color: var(--color-primary-blue, #0b57d0);
+}
+
+.inboxflow-guide-sidebar-title {
+  margin: 0 10px 10px;
+  color: var(--color-text-medium, #5f6368);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.inboxflow-guide-category {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--color-text-medium, #5f6368);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+}
+
+.inboxflow-guide-category:hover,
+.inboxflow-guide-category[aria-pressed="true"] {
+  background: var(--color-light-blue-bg, #e8f0fe);
+  color: var(--color-primary-blue, #0b57d0);
+}
+
+.inboxflow-guide-main {
+  min-width: 0;
+  padding: 20px 24px 24px;
+}
+
+.inboxflow-guide-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inboxflow-guide-search {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border, #dadce0);
+  border-radius: 12px;
+  background: var(--color-card-bg, #fff);
+  color: var(--color-text-dark, #202124);
+  font: inherit;
+}
+
+.inboxflow-guide-search:focus-visible,
+.inboxflow-guide button:focus-visible,
+.inboxflow-tour button:focus-visible {
+  outline: 2px solid var(--color-primary-blue, #0b57d0);
+  outline-offset: 2px;
+}
+
+.inboxflow-guide-clear {
+  position: absolute;
+  right: 6px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--color-card-bg, #fff);
+  color: var(--color-primary-blue, #0b57d0);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.inboxflow-guide-directory-heading {
+  margin: 20px 0 12px;
+  font-size: 17px;
+}
+
+.inboxflow-guide-feature-list {
+  display: grid;
+  gap: 10px;
+}
+
+.inboxflow-guide-feature {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 40px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid var(--color-border, #dadce0);
+  border-radius: 13px;
+  background: var(--color-card-bg, #fff);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.inboxflow-guide-feature:hover {
+  border-color: var(--color-primary-blue, #0b57d0);
+  background: var(--color-hover-nav-bg, #f8fafd);
+}
+
+.inboxflow-guide-feature-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--color-light-blue-bg, #e8f0fe);
+  color: var(--color-primary-blue, #0b57d0);
+  font-size: 19px;
+}
+
+.inboxflow-guide-feature-name {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.inboxflow-guide-feature-description {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-text-medium, #5f6368);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.inboxflow-guide-empty {
+  padding: 28px 14px;
+  color: var(--color-text-medium, #5f6368);
+  text-align: center;
+}
+
+.inboxflow-guide-empty strong {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--color-text-dark, #202124);
+}
+
+.inboxflow-guide-detail {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 26px clamp(20px, 5vw, 48px) 36px;
+}
+
+.inboxflow-guide-back {
+  margin-bottom: 20px;
+}
+
+.inboxflow-guide-detail .inboxflow-guide-lead {
+  margin-bottom: 22px;
+}
+
+.inboxflow-guide-detail h4 {
+  margin: 22px 0 8px;
+  font-size: 15px;
+}
+
+.inboxflow-guide-detail p,
+.inboxflow-guide-detail li {
+  color: var(--color-text-medium, #5f6368);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.inboxflow-guide-detail ol,
+.inboxflow-guide-detail ul {
+  display: grid;
+  gap: 7px;
+  padding-left: 22px;
+}
+
+.inboxflow-tour {
+  z-index: 12000;
+  align-items: end;
+  padding-bottom: 24px;
+  pointer-events: none;
+}
+
+.inboxflow-tour-backdrop {
+  pointer-events: auto;
+  background: transparent;
+}
+
+.inboxflow-tour-spotlight {
+  position: fixed;
+  z-index: 2;
+  border: 3px solid var(--color-primary-blue, #0b57d0);
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: 0 0 0 9999px rgb(32 33 36 / 62%);
+  pointer-events: auto;
+}
+
+.inboxflow-tour-card {
+  z-index: 3;
+  width: min(540px, 100%);
+  max-height: calc(100vh - 48px);
+  padding: 22px 24px;
+  pointer-events: auto;
+}
+
+.inboxflow-tour-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.inboxflow-tour-progress {
+  margin: 0 42px 10px 0;
+  color: var(--color-text-medium, #5f6368);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.inboxflow-tour-card h2 {
+  margin: 0 38px 8px 0;
+  font-size: 21px;
+}
+
+.inboxflow-tour-description {
+  margin: 0;
+  color: var(--color-text-medium, #5f6368);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.inboxflow-tour-actions {
+  align-items: center;
+  margin-top: 18px;
+}
+
+.inboxflow-tour-actions .inboxflow-guide-button:last-child {
+  margin-left: auto;
+}
+
+@media (max-width: 640px) {
+  .inboxflow-guide,
+  .inboxflow-tour {
+    padding: 10px;
+  }
+
+  .inboxflow-guide-dialog {
+    max-height: calc(100vh - 20px);
+    border-radius: 16px;
+  }
+
+  .inboxflow-guide-header {
+    min-height: 60px;
+    padding: 10px 12px 10px 16px;
+  }
+
+  .inboxflow-guide-content {
+    max-height: calc(100vh - 80px);
+  }
+
+  .inboxflow-guide-directory {
+    min-height: 0;
+    grid-template-columns: 1fr;
+  }
+
+  .inboxflow-guide-sidebar {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 10px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--color-border, #dadce0);
+  }
+
+  .inboxflow-guide-sidebar-title {
+    display: none;
+  }
+
+  .inboxflow-guide-category {
+    width: auto;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .inboxflow-guide-main {
+    padding: 14px;
+  }
+
+  .inboxflow-guide-welcome {
+    padding: 28px 20px;
+  }
+
+  .inboxflow-tour {
+    padding-bottom: 10px;
+  }
+
+  .inboxflow-tour-card {
+    padding: 20px 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inboxflow-guide *,
+  .inboxflow-tour * {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+html[data-theme="dark"] .inboxflow-guide-dialog,
+html[data-theme="dark"] .inboxflow-tour-card {
+  border-color: var(--color-border);
+  background: var(--color-card-bg);
+  color: var(--color-text-dark);
+}
+
+html[data-theme="dark"] .inboxflow-guide-header,
+html[data-theme="dark"] .inboxflow-guide-sidebar {
+  border-color: var(--color-border);
+}
+
+html[data-theme="dark"] .inboxflow-guide-sidebar {
+  background: var(--color-bg-search);
+}
+
+html[data-theme="dark"] .inboxflow-guide-search,
+html[data-theme="dark"] .inboxflow-guide-feature,
+html[data-theme="dark"] .inboxflow-guide-button,
+html[data-theme="dark"] .inboxflow-guide-clear {
+  border-color: var(--color-border);
+  background: var(--color-card-bg);
+  color: var(--color-text-dark);
+}
+
+html[data-theme="dark"] .inboxflow-guide-feature:hover,
+html[data-theme="dark"] .inboxflow-guide-button:hover:not(:disabled),
+html[data-theme="dark"] .inboxflow-guide-close:hover,
+html[data-theme="dark"] .inboxflow-tour-close:hover {
+  background: var(--color-hover-nav-bg);
+}
+
+html[data-theme="dark"] .inboxflow-guide-button-primary,
+html[data-theme="dark"] .inboxflow-guide-button-primary:hover:not(:disabled) {
+  border-color: var(--color-primary-blue);
+  background: var(--color-primary-blue);
+  color: #202124;
+}
+
+html[data-theme="dark"] .inboxflow-guide-button-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+html[data-theme="dark"] .inboxflow-guide-context,
+html[data-theme="dark"] .inboxflow-guide-tip {
+  background: var(--color-hover-nav-bg);
+}
+
+html[data-theme="dark"] .inboxflow-guide-category:hover,
+html[data-theme="dark"] .inboxflow-guide-category[aria-pressed="true"] {
+  background: var(--color-active-nav-bg);
+  color: #d3e3fd;
+}
+
+html[data-theme="dark"] .inboxflow-guide-feature-icon,
+html[data-theme="dark"] .inboxflow-guide-mark {
+  background: var(--color-active-nav-bg);
+  color: #d3e3fd;
+}

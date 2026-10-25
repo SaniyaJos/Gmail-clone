@@ -1,0 +1,1066 @@
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-primary-blue: #8ab4f8;
+  --color-light-blue-bg: #28415b;
+  --color-light-blue-hover: #344e69;
+  --color-active-nav-bg: #34465e;
+  --color-hover-nav-bg: #30343a;
+  --color-text-dark: #e8eaed;
+  --color-text-medium: #bdc1c6;
+  --color-text-light: #9aa0a6;
+  --color-border: #454a50;
+  --color-border-light: #383d43;
+  --color-bg-app: #202124;
+  --color-bg-search: #303134;
+  --color-bg-page: #202124;
+  --color-card-bg: #292a2d;
+  --color-primary: #8ab4f8;
+  --color-primary-hover: #aecbfa;
+  --color-border-hover: #9aa0a6;
+  --color-error: #f28b82;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+html[data-theme] body,
+html[data-theme] .app-container,
+html[data-theme] .app-body,
+html[data-theme] .mail-panel,
+html[data-theme] .details-body,
+html[data-theme] .details-header {
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme] *,
+  html[data-theme] *::before,
+  html[data-theme] *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 7px 12px;
+  border: 1px solid #dadce0;
+  border-radius: 20px;
+  background: #fff;
+  color: #3c4043;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.theme-toggle:hover,
+.theme-toggle:focus-visible {
+  background: #f1f3f4;
+}
+
+.theme-toggle:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: 2px;
+}
+
+.theme-toggle-icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.theme-toggle-icon path:first-child {
+  fill: currentColor;
+  stroke: none;
+}
+
+.theme-toggle-label {
+  white-space: nowrap;
+}
+
+.page-theme-toggle {
+  position: fixed;
+  top: 20px;
+  right: 24px;
+  z-index: 1005;
+}
+
+.account-theme-toggle {
+  align-self: stretch;
+  margin: 0 0 10px;
+}
+
+html[data-theme="dark"] body,
+html[data-theme="dark"] .hero-section {
+  background: #202124;
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .header,
+html[data-theme="dark"] .header-container,
+html[data-theme="dark"] .signin-card,
+html[data-theme="dark"] .signup-card,
+html[data-theme="dark"] .hero-image-wrapper {
+  background-color: #292a2d;
+}
+
+html[data-theme="dark"] .header,
+html[data-theme="dark"] .signin-card,
+html[data-theme="dark"] .signup-card {
+  border-color: #454a50;
+}
+
+html[data-theme="dark"] .hero-title,
+html[data-theme="dark"] .card-title,
+html[data-theme="dark"] .logo-text,
+html[data-theme="dark"] .hero-desc,
+html[data-theme="dark"] .card-subtitle,
+html[data-theme="dark"] .input-group label,
+html[data-theme="dark"] .input-group input,
+html[data-theme="dark"] .input-group select {
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .input-group input,
+html[data-theme="dark"] .input-group select {
+  background-color: #202124;
+  border-color: #747b83;
+}
+
+html[data-theme="dark"] .input-group label {
+  background-color: #292a2d;
+}
+
+html[data-theme="dark"] .theme-toggle {
+  border-color: #5f6368;
+  background: #303134;
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .theme-toggle:hover,
+html[data-theme="dark"] .theme-toggle:focus-visible {
+  background: #3c4043;
+}
+
+html[data-theme="dark"] .btn-secondary {
+  background: #303134;
+  color: #a8c7fa;
+  border-color: #5f6368;
+}
+
+html[data-theme="dark"] .btn-secondary:hover {
+  background: #3c4043;
+}
+
+html[data-theme="dark"] .btn-primary {
+  background: #8ab4f8;
+  color: #202124;
+}
+
+html[data-theme="dark"] .btn-primary:hover {
+  background: #aecbfa;
+}
+
+html[data-theme="dark"] .logo-text span:first-child {
+  color: #e8eaed !important;
+}
+
+html[data-theme="dark"] .logo-text span:last-child {
+  color: #8ab4f8 !important;
+}
+
+html[data-theme="dark"] .signin-card,
+html[data-theme="dark"] .signup-card {
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .app-header,
+html[data-theme="dark"] .app-sidebar,
+html[data-theme="dark"] .mail-panel,
+html[data-theme="dark"] .mail-action-bar,
+html[data-theme="dark"] .compose-modal,
+html[data-theme="dark"] .search-filter-panel,
+html[data-theme="dark"] .email-info-panel,
+html[data-theme="dark"] .email-label-options,
+html[data-theme="dark"] .account-dropdown,
+html[data-theme="dark"] .confirm-empty-dialog,
+html[data-theme="dark"] .modal-content,
+html[data-theme="dark"] .actions-panel-view,
+html[data-theme="dark"] .compose-header,
+html[data-theme="dark"] .compose-body,
+html[data-theme="dark"] .modal-header,
+html[data-theme="dark"] .modal-body,
+html[data-theme="dark"] .search-filter-panel,
+html[data-theme="dark"] .email-tasks-section {
+  background-color: #292a2d;
+  color: #e8eaed;
+  border-color: #454a50;
+}
+
+html[data-theme="dark"] .app-container,
+html[data-theme="dark"] .app-body,
+html[data-theme="dark"] .mail-list-container,
+html[data-theme="dark"] .compose-modal-body {
+  background-color: #202124;
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .email-row,
+html[data-theme="dark"] .email-row.unread {
+  background-color: #292a2d;
+  color: #e8eaed;
+  border-color: #383d43;
+}
+
+html[data-theme="dark"] .email-row:hover,
+html[data-theme="dark"] .email-row.read:hover {
+  background-color: #303134;
+}
+
+html[data-theme="dark"] .email-row-actions,
+html[data-theme="dark"] .email-row-actions .action-icon-btn {
+  background-color: #303134;
+}
+
+html[data-theme="dark"] .email-subject,
+html[data-theme="dark"] .email-row.unread .email-subject,
+html[data-theme="dark"] .details-subject,
+html[data-theme="dark"] .sender-name,
+html[data-theme="dark"] .email-info-panel dd,
+html[data-theme="dark"] .email-info-panel dt,
+html[data-theme="dark"] .compose-modal input,
+html[data-theme="dark"] .compose-modal textarea,
+html[data-theme="dark"] .search-bar input,
+html[data-theme="dark"] .search-filter-panel input,
+html[data-theme="dark"] .search-filter-panel label,
+html[data-theme="dark"] .custom-label-chip {
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .email-snippet,
+html[data-theme="dark"] .email-date,
+html[data-theme="dark"] .details-time,
+html[data-theme="dark"] .receiver-email,
+html[data-theme="dark"] .sender-email,
+html[data-theme="dark"] .email-info-panel dt {
+  color: #bdc1c6;
+}
+
+html[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] select,
+html[data-theme="dark"] .search-bar,
+html[data-theme="dark"] .search-filter-panel input {
+  background-color: #202124;
+  color: #e8eaed;
+  border-color: #5f6368;
+}
+
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: #9aa0a6;
+}
+
+html[data-theme="dark"] .action-icon-btn,
+html[data-theme="dark"] .icon-btn,
+html[data-theme="dark"] .btn-text-action,
+html[data-theme="dark"] .email-info-toggle,
+html[data-theme="dark"] .email-label-picker summary,
+html[data-theme="dark"] .custom-label-select,
+html[data-theme="dark"] .custom-label-edit,
+html[data-theme="dark"] .custom-label-delete {
+  color: #bdc1c6;
+}
+
+html[data-theme="dark"] .nav-item {
+  color: #bdc1c6;
+}
+
+html[data-theme="dark"] .nav-item.active,
+html[data-theme="dark"] .custom-label-item.active {
+  color: #d3e3fd;
+}
+
+html[data-theme="dark"] .sidebar-icon,
+html[data-theme="dark"] .header-right-icon,
+html[data-theme="dark"] .search-bar-icon,
+html[data-theme="dark"] .filter-bar-icon,
+html[data-theme="dark"] .action-bar-icon-img,
+html[data-theme="dark"] .row-action-icon-img,
+html[data-theme="dark"] .details-delete-icon,
+html[data-theme="dark"] .compose-btn-icon {
+  filter: brightness(0) invert(.82);
+}
+
+html[data-theme="dark"] .header-avatar-img {
+  filter: brightness(0) invert(.82);
+}
+
+html[data-theme="dark"] .icon-btn:hover .sidebar-toggle-icon,
+html[data-theme="dark"] .icon-btn:hover .header-right-icon,
+html[data-theme="dark"] .action-icon-btn:hover .action-bar-icon-img,
+html[data-theme="dark"] .action-icon-btn:hover .details-delete-icon {
+  filter: brightness(0) invert(.82);
+}
+
+html[data-theme="dark"] .compose-btn {
+  background-color: #34465e;
+  color: #d3e3fd;
+}
+
+html[data-theme="dark"] .compose-btn:hover {
+  background-color: #405875;
+}
+
+html[data-theme="dark"] .btn-dropdown-logout {
+  background-color: #303134;
+  color: #a8c7fa;
+  border-color: #5f6368;
+}
+
+html[data-theme="dark"] .btn-dropdown-logout:hover {
+  background-color: #3c4043;
+  border-color: #8ab4f8;
+}
+
+html[data-theme="dark"] .custom-label-chip {
+  background-color: #3c4043;
+}
+
+html[data-theme="dark"] .custom-label-item:hover,
+html[data-theme="dark"] .nav-item:hover,
+html[data-theme="dark"] .action-icon-btn:hover,
+html[data-theme="dark"] .icon-btn:hover {
+  background-color: #3c4043;
+}
+
+html[data-theme="dark"] .email-row-select,
+html[data-theme="dark"] .action-checkbox,
+html[data-theme="dark"] .email-label-option input {
+  accent-color: #8ab4f8;
+}
+
+html[data-theme="dark"] .email-label-option,
+html[data-theme="dark"] .empty-title,
+html[data-theme="dark"] .empty-subtitle,
+html[data-theme="dark"] .dropdown-name,
+html[data-theme="dark"] .dropdown-email,
+html[data-theme="dark"] .search-filter-actions,
+html[data-theme="dark"] .folder-banner {
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .email-label-options,
+html[data-theme="dark"] .email-label-picker[open] .email-label-options {
+  background: #303134;
+}
+
+html[data-theme="dark"] .email-attachment-card,
+html[data-theme="dark"] .email-info-panel,
+html[data-theme="dark"] .search-filter-panel,
+html[data-theme="dark"] .email-label-options {
+  border-color: #454a50;
+}
+
+html[data-theme="dark"] .email-attachment-preview,
+html[data-theme="dark"] .attachment-preview-unavailable,
+html[data-theme="dark"] .attachment-file-icon {
+  background-color: #3c4043;
+  color: #a8c7fa;
+}
+
+html[data-theme="dark"] .thread-deleted-banner,
+html[data-theme="dark"] .email-label-picker summary:hover {
+  background-color: #3c4043;
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .details-content {
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .empty-icon {
+  color: #9aa0a6;
+}
+
+html[data-theme="dark"] .confirm-dialog,
+html[data-theme="dark"] .modal-header,
+html[data-theme="dark"] .modal-body,
+html[data-theme="dark"] .compose-modal-header,
+html[data-theme="dark"] .confirm-dialog-card {
+  background-color: #292a2d;
+  color: #e8eaed;
+  border-color: #454a50;
+}
+
+html[data-theme="dark"] .btn-detail-action,
+html[data-theme="dark"] .deleted-msg-restore-btn,
+html[data-theme="dark"] .deleted-msg-delete-btn,
+html[data-theme="dark"] .action-priority-select,
+html[data-theme="dark"] .action-tab-btn.active,
+html[data-theme="dark"] .bulk-label-actions select,
+html[data-theme="dark"] .bulk-label-actions button {
+  background-color: #303134;
+  color: #e8eaed;
+  border-color: #5f6368;
+}
+
+html[data-theme="dark"] .btn-detail-action svg,
+html[data-theme="dark"] .btn-detail-action:hover,
+html[data-theme="dark"] .btn-dialog-cancel {
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .btn-detail-action:hover,
+html[data-theme="dark"] .deleted-msg-restore-btn:hover,
+html[data-theme="dark"] .action-tab-btn.active {
+  background-color: #3c4043;
+}
+
+html[data-theme="dark"] .btn-dialog-confirm {
+  background-color: #8ab4f8;
+  color: #202124;
+}
+
+html[data-theme="dark"] .spam-warning {
+  background-color: #493d24;
+  border-color: #69572d;
+  color: #f9e7b4;
+}
+
+html[data-theme="dark"] .actions-tabs,
+html[data-theme="dark"] .actions-filter-tabs,
+html[data-theme="dark"] .task-email-ref,
+html[data-theme="dark"] .deadline-chip.no-deadline {
+  background-color: #303134;
+  color: #bdc1c6;
+}
+
+html[data-theme="dark"] .actions-ai-tag,
+html[data-theme="dark"] .task-email-ref:hover {
+  background-color: #34465e;
+  border-color: #526987;
+  color: #d3e3fd;
+}
+
+html[data-theme="dark"] .actions-banner.success {
+  background-color: #203d30;
+  border-color: #345b47;
+  color: #a8dab5;
+}
+
+html[data-theme="dark"] .actions-banner.error {
+  background-color: #4a2929;
+  border-color: #714040;
+  color: #f4b8b4;
+}
+
+html[data-theme="dark"] .actions-banner.info {
+  background-color: #26394f;
+  border-color: #3d5877;
+  color: #a8c7fa;
+}
+
+html[data-theme="dark"] .modal-footer,
+html[data-theme="dark"] .compose-attachments {
+  border-color: #454a50;
+}
+
+html[data-theme="dark"] .compose-attachment-chip {
+  background-color: #303134;
+  border-color: #5f6368;
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .email-attachment-name {
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .email-attachment-type,
+html[data-theme="dark"] .thread-deleted-sep,
+html[data-theme="dark"] .thread-deleted-forever-wrap {
+  color: #bdc1c6;
+}
+
+html[data-theme="dark"] .footer,
+html[data-theme="dark"] .folder-banner,
+html[data-theme="dark"] .search-filter-actions button,
+html[data-theme="dark"] .email-attachment-card,
+html[data-theme="dark"] .task-card {
+  background-color: #292a2d;
+  color: #e8eaed;
+  border-color: #454a50;
+}
+
+html[data-theme="dark"] .task-card.completed {
+  background-color: #303134;
+  border-color: #5f4545;
+}
+
+html[data-theme="dark"] .task-reason {
+  background-color: #3c4043;
+  color: #bdc1c6;
+}
+
+html[data-theme="dark"] .actions-empty-icon,
+html[data-theme="dark"] .empty-icon.is-good {
+  background-color: #203d30;
+  color: #a8dab5;
+}
+
+html[data-theme="dark"] .sender-avatar,
+html[data-theme="dark"] .thread-collapsed-avatar {
+  background-color: #3c4043;
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .task-checkbox {
+  background-color: #202124;
+  border-color: #9aa0a6;
+}
+
+html[data-theme="dark"] .task-checkbox:checked {
+  background-color: #8ab4f8;
+  border-color: #8ab4f8;
+}
+
+html[data-theme="dark"] .tasks-section-badge,
+html[data-theme="dark"] .priority-low {
+  background-color: #26394f;
+  border-color: #3d5877;
+  color: #a8c7fa;
+}
+
+html[data-theme="dark"] .priority-high,
+html[data-theme="dark"] .task-email-ref.in-spam,
+html[data-theme="dark"] .thread-message-card.deleted-card {
+  background-color: #4a2929;
+  border-color: #714040;
+  color: #f4b8b4;
+}
+
+html[data-theme="dark"] .thread-bin-badge {
+  background-color: #4a2929 !important;
+  border-color: #714040;
+  color: #f4b8b4 !important;
+}
+
+html[data-theme="dark"] .priority-medium,
+html[data-theme="dark"] .task-email-ref.in-trash {
+  background-color: #493d24;
+  border-color: #69572d;
+  color: #f9e7b4;
+}
+
+html[data-theme="dark"] .status-chip.completed {
+  background-color: #203d30;
+  border-color: #345b47;
+  color: #a8dab5;
+}
+
+html[data-theme="dark"] .task-description,
+html[data-theme="dark"] .task-title,
+html[data-theme="dark"] .actions-panel-title,
+html[data-theme="dark"] .actions-panel-subtitle,
+html[data-theme="dark"] .chip-text,
+html[data-theme="dark"] .chip-close,
+html[data-theme="dark"] .to-label,
+html[data-theme="dark"] .thread-deleted-text,
+html[data-theme="dark"] .thread-deleted-link {
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .task-card.completed .task-description,
+html[data-theme="dark"] .task-card.completed .task-reason,
+html[data-theme="dark"] .task-email-ref.deleted,
+html[data-theme="dark"] .btn-re-extract {
+  color: #bdc1c6;
+}
+
+html[data-theme="dark"] .folder-banner-btn:hover,
+html[data-theme="dark"] .compose-attachment-remove:hover,
+html[data-theme="dark"] .compose-attach-button:hover,
+html[data-theme="dark"] .email-info-toggle:hover {
+  background-color: #3c4043;
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .thread-deleted-banner {
+  background-color: #303134;
+  border-color: #454a50;
+}
+
+html[data-theme="dark"] .details-sender-info.has-previous-messages {
+  border-top-color: #454a50;
+}
+
+html[data-theme="dark"] .compose-attachment-remove,
+html[data-theme="dark"] .attachment-download-button,
+html[data-theme="dark"] .email-attachment-download {
+  color: #a8c7fa;
+}
+
+html[data-theme="dark"] .gmail-quote {
+  border-left-color: #5f6368;
+}
+
+html[data-theme="dark"] .strength-bar-wrapper {
+  background-color: #3c4043;
+}
+
+/* =========================================================
+   DARK MODE: OPENED EMAIL VIEW (EMAIL DETAILS & THREADS)
+   Unified, cohesive surface with consistent backgrounds,
+   soft borders, balanced spacing, and clean text contrast.
+   ========================================================= */
+
+/* Main Container: Single continuous, clean dark surface */
+html[data-theme="dark"] .email-details-modal {
+  background-color: #1e1f20 !important;
+  color: #e8eaed !important;
+  border: 1px solid #303134;
+}
+
+/* Header & Body: Inherit container background seamlessly without disconnect */
+html[data-theme="dark"] .email-details-modal .details-header {
+  background-color: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid #2d2f32 !important;
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+}
+
+html[data-theme="dark"] .email-details-modal .details-body {
+  background-color: transparent !important;
+  color: #e8eaed !important;
+}
+
+/* Header Action & Navigation Buttons */
+html[data-theme="dark"] .email-details-modal .icon-btn.back-btn,
+html[data-theme="dark"] .email-details-modal .details-actions .action-icon-btn {
+  color: #bdc1c6 !important;
+  background-color: transparent !important;
+  border-radius: 50%;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+html[data-theme="dark"] .email-details-modal .icon-btn.back-btn:hover,
+html[data-theme="dark"] .email-details-modal .details-actions .action-icon-btn:hover {
+  color: #f1f3f4 !important;
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html[data-theme="dark"] .email-details-modal .btn-action-extract {
+  background: linear-gradient(135deg, #1e3a5f 0%, #152542 100%) !important;
+  border: 1px solid #38567d !important;
+  color: #d3e3fd !important;
+}
+
+html[data-theme="dark"] .email-details-modal .btn-action-extract:hover {
+  background: linear-gradient(135deg, #274b7a 0%, #1c3358 100%) !important;
+  border-color: #8ab4f8 !important;
+  color: #ffffff !important;
+}
+
+html[data-theme="dark"] .email-details-modal .btn-text-action {
+  background-color: #28292c !important;
+  border: 1px solid #3c4043 !important;
+  color: #e8eaed !important;
+}
+
+html[data-theme="dark"] .email-details-modal .btn-text-action:hover {
+  background-color: #333539 !important;
+  color: #8ab4f8 !important;
+  border-color: #8ab4f8 !important;
+}
+
+/* Subject Row: Fully integrated with zero background clashing */
+html[data-theme="dark"] .email-details-modal .details-subject-row {
+  background-color: transparent !important;
+  margin-bottom: 18px;
+  padding-bottom: 2px;
+}
+
+html[data-theme="dark"] .email-details-modal .details-subject {
+  color: #f1f3f4 !important;
+  font-weight: 500;
+  letter-spacing: -0.2px;
+}
+
+html[data-theme="dark"] .email-details-modal .details-star-button:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html[data-theme="dark"] .email-details-modal .details-star-icon {
+  filter: brightness(0) invert(0.65) !important;
+  opacity: 0.6 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .details-star-icon.starred {
+  filter: none !important;
+  opacity: 1 !important;
+}
+
+/* Older Messages: Subtle, beautifully blended collapsed cards */
+html[data-theme="dark"] .email-details-modal .thread-older-messages {
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+html[data-theme="dark"] .email-details-modal .thread-message-card.collapsed,
+html[data-theme="dark"] .thread-message-card.collapsed {
+  background-color: #26272a !important;
+  border: 1px solid #35373a !important;
+  border-radius: 8px !important;
+  padding: 10px 16px !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+html[data-theme="dark"] .email-details-modal .thread-message-card.collapsed:hover,
+html[data-theme="dark"] .thread-message-card.collapsed:hover {
+  background-color: #2e3034 !important;
+  border-color: #484b50 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .thread-collapsed-name,
+html[data-theme="dark"] .thread-collapsed-name {
+  color: #e8eaed !important;
+  font-weight: 500;
+}
+
+html[data-theme="dark"] .email-details-modal .thread-collapsed-snippet,
+html[data-theme="dark"] .thread-collapsed-snippet {
+  color: #9aa0a6 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .thread-collapsed-time,
+html[data-theme="dark"] .thread-collapsed-time {
+  color: #9aa0a6 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .thread-star-btn,
+html[data-theme="dark"] .thread-star-btn {
+  color: #9aa0a6 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .thread-star-btn:hover,
+html[data-theme="dark"] .thread-star-btn:hover {
+  color: #e8eaed !important;
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Expanded Thread Cards */
+html[data-theme="dark"] .email-details-modal .thread-message-card:not(.collapsed),
+html[data-theme="dark"] .thread-message-card:not(.collapsed) {
+  background-color: #232427 !important;
+  border: 1px solid #35373a !important;
+  border-radius: 8px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25) !important;
+  padding: 16px 20px !important;
+}
+
+html[data-theme="dark"] .email-details-modal .thread-sender-name {
+  color: #e8eaed !important;
+  font-weight: 600;
+}
+
+html[data-theme="dark"] .email-details-modal .thread-sender-email,
+html[data-theme="dark"] .email-details-modal .thread-receiver-row {
+  color: #9aa0a6 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .thread-time {
+  color: #9aa0a6 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .thread-quick-reply-btn,
+html[data-theme="dark"] .email-details-modal .thread-forward-btn,
+html[data-theme="dark"] .email-details-modal .thread-delete-btn {
+  color: #9aa0a6 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .thread-quick-reply-btn:hover,
+html[data-theme="dark"] .email-details-modal .thread-forward-btn:hover,
+html[data-theme="dark"] .email-details-modal .thread-delete-btn:hover {
+  color: #e8eaed !important;
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Active Message Sender Info & Divider */
+html[data-theme="dark"] .email-details-modal .details-sender-info.has-previous-messages {
+  border-top: 1px solid #35373a !important;
+  padding-top: 20px !important;
+  margin-top: 14px !important;
+}
+
+html[data-theme="dark"] .email-details-modal .sender-name,
+html[data-theme="dark"] .email-details-modal #details-sender-name {
+  color: #e8eaed !important;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+html[data-theme="dark"] .email-details-modal .sender-email,
+html[data-theme="dark"] .email-details-modal #details-sender-email {
+  color: #9aa0a6 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .receiver-row,
+html[data-theme="dark"] .email-details-modal .receiver-email,
+html[data-theme="dark"] .email-details-modal #details-receiver-email {
+  color: #9aa0a6 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .email-info-toggle {
+  color: #9aa0a6 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .email-info-toggle:hover {
+  color: #e8eaed !important;
+}
+
+html[data-theme="dark"] .email-details-modal .details-time {
+  color: #9aa0a6 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .details-sender-right .action-icon-btn {
+  color: #9aa0a6 !important;
+  background-color: transparent !important;
+}
+
+html[data-theme="dark"] .email-details-modal .details-sender-right .action-icon-btn:hover {
+  color: #e8eaed !important;
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Scoped Label Picker Dropdown in Opened Email */
+html[data-theme="dark"] .email-details-modal .email-label-picker summary {
+  color: #9aa0a6 !important;
+  background-color: transparent !important;
+}
+
+html[data-theme="dark"] .email-details-modal .email-label-picker summary:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html[data-theme="dark"] .email-details-modal .email-label-picker summary img {
+  filter: brightness(0) invert(0.82) !important;
+}
+
+html[data-theme="dark"] .email-details-modal .email-label-picker[open] .email-label-options {
+  background-color: #26272a !important;
+  border: 1px solid #35373a !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+}
+
+html[data-theme="dark"] .email-details-modal .email-label-option {
+  color: #e8eaed !important;
+}
+
+html[data-theme="dark"] .email-details-modal .email-label-option:hover {
+  background-color: #333539 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .label-feedback {
+  color: #9aa0a6 !important;
+}
+
+/* Message Content & Quotes */
+html[data-theme="dark"] .email-details-modal .details-content,
+html[data-theme="dark"] .email-details-modal .thread-message-body,
+html[data-theme="dark"] .email-details-modal .email-body-content {
+  color: #e8eaed !important;
+  line-height: 1.6;
+}
+
+html[data-theme="dark"] .email-details-modal .gmail-quote-header {
+  color: #9aa0a6 !important;
+  margin-top: 14px;
+}
+
+html[data-theme="dark"] .email-details-modal .gmail-quote {
+  border-left: 2px solid #5f6368 !important;
+  color: #bdc1c6 !important;
+  padding-left: 12px;
+}
+
+/* Bottom Action Bar: Reply & Forward buttons */
+html[data-theme="dark"] .email-details-modal .details-reply-forward-bar {
+  background-color: transparent !important;
+  margin-top: 28px;
+  margin-bottom: 24px;
+}
+
+html[data-theme="dark"] .email-details-modal .btn-detail-action {
+  background-color: #26272a !important;
+  border: 1px solid #4a4d52 !important;
+  color: #e8eaed !important;
+  border-radius: 19px !important;
+  transition: all 0.15s ease;
+}
+
+html[data-theme="dark"] .email-details-modal .btn-detail-action svg {
+  color: #bdc1c6 !important;
+  transition: all 0.15s ease;
+}
+
+html[data-theme="dark"] .email-details-modal .btn-detail-action:hover {
+  background-color: #303236 !important;
+  border-color: #8ab4f8 !important;
+  color: #8ab4f8 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+}
+
+html[data-theme="dark"] .email-details-modal .btn-detail-action:hover svg {
+  color: #8ab4f8 !important;
+}
+
+/* Extended Info Panel */
+html[data-theme="dark"] .email-details-modal .email-info-panel {
+  background-color: #26272a !important;
+  border: 1px solid #35373a !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35) !important;
+}
+
+html[data-theme="dark"] .email-details-modal .email-info-panel dt {
+  color: #9aa0a6 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .email-info-panel dd {
+  color: #e8eaed !important;
+}
+
+/* Labels Panel */
+html[data-theme="dark"] .email-details-modal .email-labels-panel {
+  background-color: transparent !important;
+}
+
+html[data-theme="dark"] .email-details-modal .custom-label-chip {
+  background-color: #2c2e31 !important;
+  border: 1px solid #3c4043 !important;
+  color: #e8eaed !important;
+}
+
+/* Attachments */
+html[data-theme="dark"] .email-details-modal .email-attachments h3 {
+  color: #bdc1c6 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .email-attachment-card {
+  background-color: #26272a !important;
+  border: 1px solid #35373a !important;
+  color: #e8eaed !important;
+  border-radius: 8px !important;
+}
+
+html[data-theme="dark"] .email-details-modal .email-attachment-card:hover {
+  background-color: #2d2f33 !important;
+  border-color: #4f5358 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .email-attachment-preview {
+  background-color: #1e1f20 !important;
+  border-bottom: 1px solid #35373a !important;
+}
+
+html[data-theme="dark"] .email-details-modal .email-attachment-name {
+  color: #e8eaed !important;
+}
+
+html[data-theme="dark"] .email-details-modal .email-attachment-size {
+  color: #9aa0a6 !important;
+}
+
+/* Deleted Messages Banner & Items */
+html[data-theme="dark"] .email-details-modal .thread-deleted-banner {
+  background-color: #26272a !important;
+  border: 1px solid #35373a !important;
+  color: #bdc1c6 !important;
+  border-radius: 8px !important;
+}
+
+html[data-theme="dark"] .email-details-modal .thread-deleted-text,
+html[data-theme="dark"] .email-details-modal .thread-deleted-sep,
+html[data-theme="dark"] .email-details-modal .thread-deleted-forever-wrap {
+  color: #bdc1c6 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .thread-deleted-link {
+  color: #8ab4f8 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .thread-message-card.deleted-card {
+  background-color: #2a2020 !important;
+  border: 1px solid #4a2d2d !important;
+  color: #f4b8b4 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .deleted-msg-restore-btn {
+  background-color: #26272a !important;
+  border: 1px solid #3d5a80 !important;
+  color: #8ab4f8 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .deleted-msg-restore-btn:hover {
+  background-color: #1e3a5f !important;
+  color: #d3e3fd !important;
+  border-color: #8ab4f8 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .deleted-msg-delete-btn {
+  background-color: #2a2020 !important;
+  border: 1px solid #5f3333 !important;
+  color: #f28b82 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .deleted-msg-delete-btn:hover {
+  background-color: #4a2020 !important;
+  color: #f6aea9 !important;
+  border-color: #f28b82 !important;
+}
+
+/* Spam Warning Banner */
+html[data-theme="dark"] .email-details-modal .spam-warning {
+  background-color: #2e2616 !important;
+  border: 1px solid #4a3c1f !important;
+  border-radius: 8px !important;
+  color: #fce293 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .spam-warning-title {
+  color: #fce293 !important;
+}
+
+html[data-theme="dark"] .email-details-modal .spam-warning-reasons {
+  color: #f9e7b4 !important;
+}
+
+/* Inline AI Tasks Section */
+html[data-theme="dark"] .email-details-modal .email-tasks-section {
+  background-color: #26272a !important;
+  border: 1px solid #35373a !important;
+  border-radius: 8px !important;
+}
+
+@media (max-width: 600px) {
+  .theme-toggle {
+    min-height: 36px;
+    padding: 6px 9px;
+  }
+
+  .page-theme-toggle {
+    top: 10px;
+    right: 10px;
+  }
+}

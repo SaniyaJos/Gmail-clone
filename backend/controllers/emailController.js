@@ -705,7 +705,7 @@ async function reportSpam(req, res) {
     email.trashedAt = null;
     email.isStarred = false;
     if (!email.spamReasons || email.spamReasons.length === 0) {
-      email.spamReasons = ['You reported this message as spam'];
+      email.spamReasons = ['You previously reported messages from this sender as spam.'];
     }
     await email.save();
 
@@ -789,15 +789,34 @@ async function emptyFolder(req, res) {
  */
 async function getFolderCounts(req, res) {
   try {
-    const owner = req.user.email;
-    const spamUnread = await Email.countDocuments({
-      owner,
-      isSpam: true,
-      isTrash: false,
-      isDraft: false,
-      isRead: false
+    const owner = (req.user?.email || '').toLowerCase();
+    const receiverRegex = new RegExp(`(^|,\\s*)${owner.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}($|,\\s*)`, 'i');
+
+    const [inboxUnread, inboxTotal, draftsTotal, spamUnread, sentTotal] = await Promise.all([
+      // Inbox: count of unread messages
+      Email.countDocuments({ owner, receiver: receiverRegex, isTrash: false, isDraft: false, isSpam: { $ne: true }, isRead: false }),
+      // Total inbox messages
+      Email.countDocuments({ owner, receiver: receiverRegex, isTrash: false, isDraft: false, isSpam: { $ne: true } }),
+      // Draft: total number of drafts
+      Email.countDocuments({ owner, sender: owner, isDraft: true, isTrash: false }),
+      // Spam: total number of unread spam
+      Email.countDocuments({ owner, isSpam: true, isTrash: false, isDraft: false, isRead: false }),
+      // Total sent messages
+      Email.countDocuments({ owner, sender: owner, isTrash: false, isDraft: false, isSpam: { $ne: true } })
+    ]);
+
+    const allMailCount = inboxTotal + sentTotal;
+
+    return res.status(200).json({
+      inbox: inboxUnread,
+      drafts: draftsTotal,
+      spam: spamUnread,
+      all: allMailCount,
+      spamUnread,
+      starred: 0,
+      sent: 0,
+      bin: 0
     });
-    return res.status(200).json({ spamUnread });
   } catch (err) {
     console.error('Folder counts error:', err);
     return res.status(500).json({ message: 'Internal server error while counting emails' });
