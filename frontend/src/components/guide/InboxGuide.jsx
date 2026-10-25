@@ -259,7 +259,7 @@ const TOUR_STEPS = [
   }
 ];
 
-export default function InboxGuide({ isOpen, onClose }) {
+export default function InboxGuide({ isOpen, onClose, isOnboarding = false }) {
   const [guideView, setGuideView] = useState('welcome'); // 'welcome', 'directory', 'detail'
   const [activeCategory, setActiveCategory] = useState('All features');
   const [searchTerm, setSearchTerm] = useState('');
@@ -408,6 +408,15 @@ export default function InboxGuide({ isOpen, onClose }) {
                     >
                       Explore All Features
                     </button>
+                    {isOnboarding && (
+                      <button
+                        type="button"
+                        className="inboxflow-guide-button"
+                        onClick={onClose}
+                      >
+                        Skip onboarding
+                      </button>
+                    )}
                   </div>
                 </section>
               )}
@@ -564,7 +573,10 @@ export default function InboxGuide({ isOpen, onClose }) {
         >
           <div
             className="inboxflow-tour-backdrop"
-            onClick={() => setIsTourActive(false)}
+            onClick={() => {
+              setIsTourActive(false);
+              onClose();
+            }}
           />
           {spotlightRect && (
             <div
@@ -590,7 +602,10 @@ export default function InboxGuide({ isOpen, onClose }) {
               className="inboxflow-tour-close"
               aria-label="Exit guided tour"
               title="Exit tour"
-              onClick={() => setIsTourActive(false)}
+              onClick={() => {
+                setIsTourActive(false);
+                onClose();
+              }}
             >
               &times;
             </button>
@@ -614,7 +629,10 @@ export default function InboxGuide({ isOpen, onClose }) {
               <button
                 type="button"
                 className="inboxflow-guide-button"
-                onClick={() => setIsTourActive(false)}
+                onClick={() => {
+                  setIsTourActive(false);
+                  onClose();
+                }}
               >
                 Exit tour
               </button>
@@ -627,6 +645,7 @@ export default function InboxGuide({ isOpen, onClose }) {
                     setTourIndex((prev) => prev + 1);
                   } else {
                     setIsTourActive(false);
+                    onClose();
                   }
                 }}
               >

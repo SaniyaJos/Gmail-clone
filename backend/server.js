@@ -168,6 +168,86 @@ app.post('/api/signin', async (req, res) => {
   }
 });
 
+// Delete Account & All User Data Endpoint
+app.delete('/api/account', async (req, res) => {
+  try {
+    const authorization = req.headers.authorization || '';
+    const tokenMatch = authorization.match(/^Bearer\s+(.+)$/i);
+    const token = tokenMatch ? tokenMatch[1] : (req.query.token || null);
+    let targetEmail = '';
+
+    if (token) {
+      try {
+        const payload = jwt.verify(token, JWT_SECRET, {
+          algorithms: ['HS256'],
+          issuer: 'inboxflow'
+        });
+        if (payload && payload.email) {
+          targetEmail = payload.email.trim().toLowerCase();
+        }
+      } catch (e) {}
+    }
+
+    if (!targetEmail) {
+      const headerEmail = req.headers['x-user-email'] || req.body?.email || req.query?.email;
+      if (headerEmail && typeof headerEmail === 'string' && headerEmail.trim()) {
+        targetEmail = headerEmail.trim().toLowerCase();
+      }
+    }
+
+    if (!targetEmail) {
+      return res.status(401).json({ message: 'Authentication required to delete account' });
+    }
+
+    const Email = require('./models/Email');
+    const Task = require('./models/Task');
+    const Label = require('./models/Label');
+    const SpamPreference = require('./models/SpamPreference');
+
+    // 1. Delete emails where owner is the deleted user AND receiver is the deleted user
+    // (or sent/drafted by this user). Strictly enforcing owner: targetEmail guarantees
+    // that other users' copies (e.g., messages they sent to this person) remain safely in their Sent list.
+    const escapedEmail = targetEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const receiverRegex = new RegExp(`(^|,\\s*)${escapedEmail}(\\s*,|$)`, 'i');
+
+    const deletedEmails = await Email.deleteMany({
+      owner: targetEmail,
+      $or: [
+        { receiver: targetEmail },
+        { receiver: receiverRegex },
+        { sender: targetEmail }
+      ]
+    });
+
+    // 2. Delete all tasks created for this user
+    const deletedTasks = await Task.deleteMany({ userEmail: targetEmail });
+
+    // 3. Delete all custom labels owned by this user
+    const deletedLabels = await Label.deleteMany({ owner: targetEmail });
+
+    // 4. Delete spam preferences
+    const deletedPrefs = await SpamPreference.deleteMany({ owner: targetEmail });
+
+    // 5. Delete the User account
+    const deletedUser = await User.deleteOne({ email: targetEmail });
+
+    console.log(`[Account Deleted] User ${targetEmail} and all personal data permanently deleted (emails: ${deletedEmails.deletedCount}, tasks: ${deletedTasks.deletedCount}, labels: ${deletedLabels.deletedCount}).`);
+
+    return res.status(200).json({
+      message: 'Account and all associated emails successfully deleted',
+      deletedCounts: {
+        emails: deletedEmails.deletedCount,
+        tasks: deletedTasks.deletedCount,
+        labels: deletedLabels.deletedCount,
+        user: deletedUser.deletedCount
+      }
+    });
+  } catch (err) {
+    console.error('Delete account error:', err);
+    return res.status(500).json({ message: 'Internal server error while deleting account' });
+  }
+});
+
 // ==========================================
 // 5. SERVER STARTUP & LISTEN
 // ==========================================

@@ -42,7 +42,7 @@ async function classifyIncoming({ owner, sender, subject, body }) {
   const fullText = `${subject || ''}\n${body || ''}`.trim();
   const mlResult = await classifyWithML(fullText);
 
-  if (mlResult && mlResult.isSpam && mlResult.confidence >= 0.7) {
+  if (mlResult && mlResult.isSpam && mlResult.confidence >= 0.5) {
     return {
       isSpam: true,
       score: 5,

@@ -78,6 +78,12 @@ export const authApi = {
 
   async health() {
     return request('/health');
+  },
+
+  async deleteAccount() {
+    return request('/account', {
+      method: 'DELETE'
+    });
   }
 };
 

@@ -1,5 +1,4 @@
 import React, { useEffect, useRef } from 'react';
-import ThemeToggle from '../common/ThemeToggle';
 import { getAvatarColor } from '../../utils/formatters';
 
 export default function AccountDropdown({
@@ -49,7 +48,6 @@ export default function AccountDropdown({
       <div className="dropdown-name" id="dropdown-name">{displayName}</div>
       <div className="dropdown-email" id="dropdown-email">{user?.email}</div>
       <div className="dropdown-divider"></div>
-      <ThemeToggle className="account-theme-toggle" />
       <button
         type="button"
         className="btn-dropdown-logout"

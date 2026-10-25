@@ -214,7 +214,10 @@ export default function SignUpPage() {
     try {
       await authApi.signUp(payload);
       try {
-        localStorage.setItem(`inboxflow-new-signup:${payload.email.toLowerCase()}`, 'true');
+        const emailKey = payload.email.toLowerCase();
+        localStorage.setItem(`inboxflow-new-signup:${emailKey}`, 'true');
+        localStorage.setItem(`inboxflow-new-signup:${encodeURIComponent(emailKey)}`, 'true');
+        localStorage.setItem(`inboxflow-first-signin:${emailKey}`, 'true');
       } catch (_) {}
       alert(`Account created successfully!\nEmail: ${payload.email}\nYou can now sign in.`);
       navigate('/signin');

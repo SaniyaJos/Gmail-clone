@@ -193,6 +193,7 @@ html[data-theme="dark"] .search-filter-panel,
 html[data-theme="dark"] .email-info-panel,
 html[data-theme="dark"] .email-label-options,
 html[data-theme="dark"] .account-dropdown,
+html[data-theme="dark"] .settings-dropdown,
 html[data-theme="dark"] .confirm-empty-dialog,
 html[data-theme="dark"] .modal-content,
 html[data-theme="dark"] .actions-panel-view,
@@ -205,6 +206,34 @@ html[data-theme="dark"] .email-tasks-section {
   background-color: #292a2d;
   color: #e8eaed;
   border-color: #454a50;
+}
+
+html[data-theme="dark"] .settings-dropdown-title {
+  color: #e8eaed;
+}
+
+html[data-theme="dark"] .settings-section-label {
+  color: #9aa0a6;
+}
+
+html[data-theme="dark"] .settings-section-label.danger-label {
+  color: #f28b82;
+}
+
+html[data-theme="dark"] .btn-settings-delete-account {
+  background-color: #382424;
+  border-color: #5f3333;
+  color: #f28b82;
+}
+
+html[data-theme="dark"] .btn-settings-delete-account:hover {
+  background-color: #4a2828;
+  border-color: #f28b82;
+  color: #f6aea9;
+}
+
+html[data-theme="dark"] .settings-delete-hint {
+  color: #9aa0a6;
 }
 
 html[data-theme="dark"] .app-container,

@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import AccountDropdown from './AccountDropdown';
+import SettingsDropdown from './SettingsDropdown';
 import SearchFilterPanel from './SearchFilterPanel';
 import { getAvatarColor } from '../../utils/formatters';
 
@@ -9,12 +10,15 @@ export default function Header({
   searchQuery,
   onSearchChange,
   onOpenHelp,
-  onLogout
+  onLogout,
+  onDeleteAccount
 }) {
   const [isAccountOpen, setIsAccountOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   const avatarRef = useRef(null);
+  const settingsRef = useRef(null);
   const filterToggleRef = useRef(null);
 
   const displayName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.email || 'User';
@@ -91,6 +95,20 @@ export default function Header({
             <img src="/images/question-svgrepo-com.svg" alt="Help" className="header-right-icon" />
           </button>
           <button
+            ref={settingsRef}
+            type="button"
+            className="icon-btn"
+            id="inboxflow-settings-button"
+            aria-label="Settings"
+            title="Settings"
+            onClick={() => {
+              setIsSettingsOpen(!isSettingsOpen);
+              setIsAccountOpen(false);
+            }}
+          >
+            <img src="/images/settings-gear-svgrepo-com.svg" alt="Settings" className="header-right-icon" />
+          </button>
+          <button
             ref={avatarRef}
             type="button"
             className="header-avatar-btn"
@@ -98,12 +116,22 @@ export default function Header({
             title={`${displayName} (${user?.email})`}
             aria-label="Account Menu"
             style={{ backgroundColor: avatarColor, color: '#ffffff' }}
-            onClick={() => setIsAccountOpen(!isAccountOpen)}
+            onClick={() => {
+              setIsAccountOpen(!isAccountOpen);
+              setIsSettingsOpen(false);
+            }}
           >
             {initial}
           </button>
         </div>
       </header>
+
+      <SettingsDropdown
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        anchorRef={settingsRef}
+        onDeleteAccount={onDeleteAccount}
+      />
 
       <AccountDropdown
         isOpen={isAccountOpen}

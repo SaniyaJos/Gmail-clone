@@ -69,6 +69,56 @@ export default function InboxPage() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isOnboardingMode, setIsOnboardingMode] = useState(false);
+
+  // Auto-pop InboxFlow Guide only when a new user is created and signs in for the first time
+  useEffect(() => {
+    if (!user?.email) return;
+
+    const emailKey = user.email.toLowerCase();
+    const newSignupKey = `inboxflow-new-signup:${encodeURIComponent(emailKey)}`;
+    const newSignupKeyAlt = `inboxflow-new-signup:${emailKey}`;
+    const firstSigninKey = `inboxflow-first-signin:${emailKey}`;
+    const seenKey = `inboxflow-guide-onboarding:${encodeURIComponent(emailKey)}`;
+    const seenKeyAlt = `inboxflow-guide-onboarding:${emailKey}`;
+
+    const isNewUserFirstLogin =
+      localStorage.getItem(newSignupKey) === 'true' ||
+      localStorage.getItem(newSignupKeyAlt) === 'true' ||
+      localStorage.getItem(firstSigninKey) === 'true';
+
+    const hasSeenGuide =
+      localStorage.getItem(seenKey) === 'seen' ||
+      localStorage.getItem(seenKeyAlt) === 'seen';
+
+    if (isNewUserFirstLogin && !hasSeenGuide) {
+      setIsOnboardingMode(true);
+      const timer = setTimeout(() => {
+        setIsHelpOpen(true);
+      }, 700);
+      return () => clearTimeout(timer);
+    }
+  }, [user?.email]);
+
+  const handleCloseHelp = useCallback(() => {
+    setIsHelpOpen(false);
+    setIsOnboardingMode(false);
+    if (user?.email) {
+      const emailKey = user.email.toLowerCase();
+      try {
+        localStorage.removeItem(`inboxflow-new-signup:${encodeURIComponent(emailKey)}`);
+        localStorage.removeItem(`inboxflow-new-signup:${emailKey}`);
+        localStorage.removeItem(`inboxflow-first-signin:${emailKey}`);
+        localStorage.setItem(`inboxflow-guide-onboarding:${encodeURIComponent(emailKey)}`, 'seen');
+        localStorage.setItem(`inboxflow-guide-onboarding:${emailKey}`, 'seen');
+      } catch (_) {}
+    }
+  }, [user?.email]);
+
+  const handleOpenHelpManual = () => {
+    setIsOnboardingMode(false);
+    setIsHelpOpen(true);
+  };
 
   const handleToggleSidebar = () => {
     if (window.innerWidth <= 768) {
@@ -124,6 +174,19 @@ export default function InboxPage() {
     isPermanentFolder: false,
     closeDetails: false
   });
+  const [isDeleteAccountDialogOpen, setIsDeleteAccountDialogOpen] = useState(false);
+
+  const handleConfirmDeleteAccount = async () => {
+    try {
+      await authApi.deleteAccount();
+      alert('Your account and all associated emails have been permanently deleted.');
+      logout();
+      navigate('/signup');
+    } catch (err) {
+      console.error('Delete account failed:', err);
+      alert(err.data?.message || err.message || 'Failed to delete account. Please try again.');
+    }
+  };
 
   const toastTimerRef = useRef(null);
 
@@ -985,7 +1048,8 @@ export default function InboxPage() {
         onToggleSidebar={handleToggleSidebar}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        onOpenHelp={() => setIsHelpOpen(true)}
+        onOpenHelp={handleOpenHelpManual}
+        onDeleteAccount={() => setIsDeleteAccountDialogOpen(true)}
         onLogout={() => {
           logout();
           navigate('/signin');
@@ -1265,7 +1329,23 @@ export default function InboxPage() {
       <ToastSnackbar toast={toast} onClose={hideToast} />
 
       {/* Inbox Help Guide & Tour */}
-      <InboxGuide isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
+      <InboxGuide
+        isOpen={isHelpOpen}
+        isOnboarding={isOnboardingMode}
+        onClose={handleCloseHelp}
+      />
+
+      {/* Permanently Delete Account Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={isDeleteAccountDialogOpen}
+        title="Permanently Delete Account?"
+        body="Are you sure you want to permanently delete your account and all emails? This action cannot be undone and will permanently remove your user account and all personal messages, labels, and tasks from InboxFlow."
+        confirmText="Permanently Delete Account"
+        cancelText="Cancel"
+        isDanger={true}
+        onConfirm={handleConfirmDeleteAccount}
+        onCancel={() => setIsDeleteAccountDialogOpen(false)}
+      />
     </div>
   );
 }
