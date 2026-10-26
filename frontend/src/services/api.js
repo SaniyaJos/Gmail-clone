@@ -1,4 +1,5 @@
-export const API_BASE = 'http://localhost:5000/api';
+// frontend/src/services/api.js (Line 1)
+export const API_BASE = '/api';
 
 function getCurrentUser() {
   try {
@@ -23,7 +24,7 @@ export function getAuthHeaders(extraHeaders = {}) {
 async function request(endpoint, options = {}) {
   const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint}`;
   const headers = getAuthHeaders(options.headers || {});
-  
+
   const response = await fetch(url, {
     ...options,
     headers

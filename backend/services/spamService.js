@@ -1,6 +1,5 @@
 /**
  * Spam Service
- * Uses pre-trained Machine Learning transformer model (@xenova/transformers) for spam detection.
  * Respects user sender preferences (blocked / allowed).
  */
 

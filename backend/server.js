@@ -185,7 +185,7 @@ app.delete('/api/account', async (req, res) => {
         if (payload && payload.email) {
           targetEmail = payload.email.trim().toLowerCase();
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (!targetEmail) {
@@ -246,6 +246,16 @@ app.delete('/api/account', async (req, res) => {
     console.error('Delete account error:', err);
     return res.status(500).json({ message: 'Internal server error while deleting account' });
   }
+});
+// backend/server.js (Add right above app.listen)
+const path = require('path');
+
+// 1. Serve static files from the compiled React Vite build
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
+
+// 2. Any request that does NOT match an /api route gets sent to React's index.html
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
 });
 
 // ==========================================
